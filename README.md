@@ -42,8 +42,10 @@ transferred to another wallet.
 
 ## Status
 
-Tested with a practice key and simulated wallets only. Not yet tested with
-real Phantom, Solflare or MetaMask. There is no payment or support page yet.
+Live at `kaymyg.brave` (opens in the Brave browser). Connecting and firing
+nerves has been tested there with a real MetaMask wallet. Phantom and Solflare
+have been tested with simulated wallets only. There is no payment or support
+page yet.
 
 ## Limits
 
