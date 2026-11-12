@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MYELIN</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* layout idea: a dark lightbox, the body in the centre, wallet and progress on the left, the firing console on the right */
+:root{
+  color-scheme:dark;
+  --ink:#0e1620;
+  --panel:#16212dee;
+  --line:#2a3a4b;
+  --text:#e6edf3;
+  --muted:#93a4b5;
+  --dormant:#55616e;    /* a nerve not yet fired */
+  --nerve:#f2c14e;      /* accent, nerve yellow */
+  --signal:#7fe7ff;     /* a travelling impulse */
+  --ok:#7ddc9a;
+  --bad:#ff8a8a;
+  --display:"Fraunces",Georgia,serif;
+  --body:"IBM Plex Sans",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--ink);color:var(--text);font:14px/1.5 var(--body);overflow:hidden}
+#stage{position:fixed;inset:0}
+#stage canvas{display:block;width:100%;height:100%;touch-action:none;cursor:grab}
+#stage canvas:active{cursor:grabbing}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;background:none;border:1px solid var(--line);border-radius:6px;padding:6px 10px}
+button:hover{border-color:var(--muted)}
+button:disabled{opacity:.45;cursor:default}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--signal);outline-offset:2px}
+button.primary{background:var(--nerve);color:#1a1405;border-color:var(--nerve);font-weight:600}
+h1{font:600 26px/1.1 var(--display);margin:0;letter-spacing:.14em}
+h2{font:600 12px/1.2 var(--body);letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin:0}
+h3{font:600 18px/1.2 var(--display);margin:0;text-wrap:balance}
+p{margin:0}
+.panel{position:fixed;top:16px;bottom:16px;width:300px;background:var(--panel);border:1px solid var(--line);border-radius:12px;backdrop-filter:blur(10px);display:flex;flex-direction:column;overflow:hidden}
+#left{left:16px}
+#right{right:16px;width:340px}
+.pad{padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.scroll{overflow-y:auto;flex:1;min-height:0;scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+.sep{border-top:1px solid var(--line)}
+.sub{color:var(--muted);font-size:12.5px}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.big{font:500 30px/1 var(--mono);font-variant-numeric:tabular-nums}
+.big small{font-size:14px;color:var(--muted)}
+.bar{height:6px;background:#0c131b;border-radius:3px;position:relative;overflow:hidden;border:1px solid var(--line)}
+.bar i{position:absolute;inset:0 auto 0 0;background:var(--nerve);width:0}
+.tier{display:grid;grid-template-columns:12px 1fr auto;gap:8px;align-items:center;font-size:13px;padding:2px 0}
+.sw{width:10px;height:10px;border-radius:50%}
+.tier .ct{color:var(--muted);font:12px var(--mono);font-variant-numeric:tabular-nums}
+#q{width:100%;background:#0c131b;border:1px solid var(--line);border-radius:6px;padding:8px 10px}
+.layer{display:flex;align-items:center;gap:8px;padding:2px 0;cursor:pointer;font-size:13px}
+.layer input{accent-color:var(--nerve);margin:0}
+input[type=range]{accent-color:var(--nerve);flex:1;min-width:80px}
+.tabs{display:flex;border-bottom:1px solid var(--line)}
+.tabs button{flex:1;border:0;border-radius:0;padding:11px 6px;color:var(--muted);border-bottom:2px solid transparent}
+.tabs button.on{color:var(--text);border-bottom-color:var(--nerve)}
+.chip{display:inline-flex;align-items:center;gap:6px;font:500 11px var(--mono);letter-spacing:.05em;text-transform:uppercase;border:1px solid var(--line);border-radius:99px;padding:2px 8px;color:var(--muted);align-self:flex-start}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:13px;margin:0}
+.kv dt{color:var(--muted)}
+.kv dd{margin:0;overflow-wrap:anywhere}
+pre.msg{margin:0;background:#0c131b;border:1px solid var(--line);border-radius:6px;padding:8px 10px;font:12px/1.5 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere}
+.state{font-weight:600}
+.state.ok{color:var(--ok)} .state.bad{color:var(--bad)}
+.list{display:flex;flex-direction:column}
+.list button{border:0;border-radius:4px;text-align:left;padding:4px 6px;display:grid;grid-template-columns:12px 1fr auto;gap:8px;align-items:center;font-size:13px}
+.list button:hover{background:#ffffff10}
+.list button .sw{opacity:.25}
+.list button.done .sw{opacity:1}
+.list button small{color:var(--muted);font:12px var(--mono)}
+.list .hd{font:500 11px var(--mono);color:var(--nerve);letter-spacing:.06em;text-transform:uppercase;margin:8px 0 2px}
+textarea{width:100%;min-height:90px;background:#0c131b;border:1px solid var(--line);border-radius:6px;padding:8px;font:11.5px/1.4 var(--mono);resize:vertical}
+.clock{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.clock b{font:500 24px/1 var(--mono);font-variant-numeric:tabular-nums;color:var(--signal)}
+.note{border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:13px}
+#hud{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);display:flex;gap:6px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:6px;backdrop-filter:blur(10px)}
+#hud button{border:0;padding:6px 10px;white-space:nowrap}
+#hud button:hover{background:#ffffff12}
+#tip{position:fixed;pointer-events:none;background:#0c131bf2;border:1px solid var(--line);border-radius:6px;padding:4px 8px;font-size:12.5px;display:none;max-width:260px;z-index:5}
+#load{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:var(--ink);z-index:9;flex-direction:column;gap:10px}
+#load .bar{width:220px}
+dialog{background:#16212d;color:var(--text);border:1px solid var(--line);border-radius:12px;max-width:600px;padding:22px 24px}
+dialog::backdrop{background:#0008}
+dialog p,dialog li{max-width:65ch;margin:8px 0}
+dialog ul{padding-left:18px;margin:0}
+table{border-collapse:collapse;width:100%;font-size:13px;margin:8px 0}
+th,td{text-align:left;padding:5px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--muted);font-weight:500}
+td code{font-family:var(--mono)}
+a{color:var(--signal)}
+.mob{display:none}
+@media (max-width:860px){
+  #stage{bottom:46%}
+  .panel{top:auto;left:8px!important;right:8px!important;width:auto!important;bottom:8px;max-height:46%}
+  #left{display:none;max-height:75%;z-index:4}
+  #left.open{display:flex}
+  #hud{bottom:auto;top:8px;max-width:calc(100% - 16px);overflow-x:auto}
+  .mob{display:inline-block}
+}
+</style>
+<script src="./nacl-fast.min.js"></script>
+<script type="importmap">{"imports":{"three":"./three.module.min.js"}}</script>
+</head>
+<body>
+<div id="stage"></div>
+
+<aside class="panel" id="left" aria-label="Wallet and progress">
+  <div class="pad">
+    <h1>MYELIN</h1>
+    <p class="sub">Collect the 165. Fire a nerve by signing a plain text message. No transaction, no fee.</p>
+    <div id="walletBox"></div>
+  </div>
+  <div class="sep"></div>
+  <div class="scroll"><div class="pad">
+    <h2>Myelinated</h2>
+    <div class="big"><span id="pN">0</span><small> / 165 nerves</small></div>
+    <div class="bar"><i id="pBar"></i></div>
+    <div id="tiers"></div>
+    <div class="note" id="ghostNote"></div>
+    <h2 style="margin-top:6px">View</h2>
+    <div id="layers"></div>
+    <div class="row"><label for="boneOp" class="sub">Bone opacity</label><input id="boneOp" type="range" min="8" max="100" value="35"></div>
+    <div class="row" style="margin-top:6px">
+      <button id="contractBtn">Security contract</button>
+      <button id="aboutBtn">Sources and limits</button>
+    </div>
+  </div></div>
+</aside>
+
+<aside class="panel" id="right" aria-label="Firing console">
+  <div class="tabs" role="tablist">
+    <button id="tabFire" class="on" role="tab">Fire</button>
+    <button id="tabColl" role="tab">Collection</button>
+    <button id="tabRec" role="tab">Receipts</button>
+  </div>
+  <div class="scroll" id="paneFire"><div class="pad">
+    <div id="simBox" hidden>
+      <div class="clock"><b id="simT">0.0 ms</b><span class="sub" id="simSlow"></span></div>
+      <div class="bar"><i id="simBar" style="background:var(--signal)"></i></div>
+    </div>
+    <div id="selBox" style="display:flex;flex-direction:column;gap:10px"></div>
+  </div></div>
+  <div class="scroll" id="paneColl" hidden><div class="pad">
+    <input id="q" type="search" placeholder="Filter nerves by name" autocomplete="off" aria-label="Filter nerves">
+    <label class="layer"><input type="checkbox" id="onlyTodo">Show only nerves not yet fired</label>
+    <div class="list" id="collList"></div>
+  </div></div>
+  <div class="scroll" id="paneRec" hidden><div class="pad">
+    <h2>Your receipts</h2>
+    <p class="sub">Each receipt is the message you signed plus the signature. It proves which wallet fired which nerve on which site. The time inside it is stated by your own device and is not proof of when.</p>
+    <div class="row"><button id="expBtn">Copy my receipts</button><span class="sub" id="expMsg"></span></div>
+    <textarea id="expTxt" readonly aria-label="Your receipts as JSON" placeholder="Fire a nerve and your receipts appear here."></textarea>
+    <h2 style="margin-top:8px">Check someone else's</h2>
+    <p class="sub">Paste their receipt file, or choose it. Every signature is checked here in your browser. Nothing is sent anywhere.</p>
+    <textarea id="impTxt" aria-label="Receipts to verify" placeholder="Paste receipts JSON here"></textarea>
+    <div class="row"><button id="impBtn">Verify</button><input type="file" id="impFile" accept=".json,application/json" style="font-size:12px;max-width:190px"></div>
+    <div id="impOut" style="display:flex;flex-direction:column;gap:8px"></div>
+  </div></div>
+</aside>
+
+<div id="hud">
+  <button class="mob" id="menuBtn">Wallet</button>
+  <button data-view="front">Front</button>
+  <button data-view="back">Back</button>
+  <button data-view="left">Left</button>
+  <button data-view="right">Right</button>
+  <button data-view="head">Head</button>
+  <button data-view="all">Whole body</button>
+</div>
+<div id="tip"></div>
+<div id="load"><h1>MYELIN</h1><p class="sub" id="loadMsg">Loading anatomy</p><div class="bar"><i id="loadBar"></i></div></div>
+
+<dialog id="contract">
+  <h3>Security contract</h3>
+  <p>This page talks to your wallet through two calls only. The code contains no transaction building of any kind, and it makes no network requests after the page has loaded.</p>
+  <table>
+    <tr><th>Wallet method</th><th>Used</th><th>Why</th></tr>
+    <tr><td><code>connect()</code></td><td>Yes</td><td>Reads your public address.</td></tr>
+    <tr><td><code>signMessage()</code></td><td>Yes</td><td>Signs the short plain text shown before you fire. No fee, nothing sent to the chain.</td></tr>
+    <tr><td><code>disconnect()</code></td><td>Yes</td><td>Only when you press Disconnect.</td></tr>
+    <tr><td><code>signTransaction()</code></td><td>Never</td><td rowspan="3">Not present in the code.</td></tr>
+    <tr><td><code>signAndSendTransaction()</code></td><td>Never</td></tr>
+    <tr><td><code>signAllTransactions()</code></td><td>Never</td></tr>
+  </table>
+  <ul>
+    <li>Phantom and Solflare are reached directly. MetaMask and other wallets are reached through the Wallet Standard, using its connect and sign message features only. MetaMask needs a Solana account, an Ethereum account cannot sign these receipts.</li>
+    <li>Read the message in your wallet before you approve it. It should start with <code>MYELIN v1</code> and match the text shown on this page. If your wallet ever shows a transaction from this page, reject it.</li>
+    <li>Your wallet may still show a caution for a site it has not seen before. That is about the address of the page, not about what is being signed.</li>
+    <li>Progress is stored in this browser only. Clearing site data removes it, so keep a copy of your receipts.</li>
+    <li>The practice key is a throwaway key made in this browser so you can try the game without a wallet. It holds no funds and its receipts are marked as practice.</li>
+  </ul>
+  <form method="dialog"><button>Close</button></form>
+</dialog>
+
+<dialog id="about">
+  <h3>Sources and limits</h3>
+  <p><b>Bones and brain parts are real 3D data</b> from BodyParts3D, © The Database Center for Life Science, licensed under CC Attribution 4.0 International, with geometry simplified by the open source Human Atlas project.</p>
+  <p><b>Nerve routes are schematic.</b> Each nerve is a curve drawn along the real bones from standard anatomy, accurate to roughly a centimetre or two. Good for learning routes, not for clinical use.</p>
+  <ul>
+    <li>Tiers use one speed per nerve, a typical figure for its fastest fibres. Real nerves carry a mix of fast and slow fibres and values vary between people.</li>
+    <li>The nine bonus bones (six ear ossicles, two inferior nasal conchae, the coccyx) are missing from the scan. The versions here are simple hand made stand ins and are labelled as reconstructed.</li>
+    <li>A receipt proves which wallet signed which message. It does not prove when, and it cannot be transferred to another wallet.</li>
+  </ul>
+  <p class="sub">Educational model, not a diagnostic tool.</p>
+  <form method="dialog"><button>Close</button></form>
+</dialog>
+
+<script type="module">
+import * as T from 'three';
+import { OrbitControls } from './OrbitControls.js';
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const hex6 = c => '#' + c.toString(16).padStart(6, '0');
+
+/* ---------- tiers: one speed per nerve, its fastest fibres ---------- */
+const TIERS = [
+  {id:'crawl',   label:'Crawl',   max:5,   color:0xc79bf2, blurb:'5 m/s or less'},
+  {id:'slow',    label:'Slow',    max:40,  color:0x6aa9ff, blurb:'up to 40 m/s'},
+  {id:'steady',  label:'Steady',  max:50,  color:0x5fd3c8, blurb:'50 m/s'},
+  {id:'brisk',   label:'Brisk',   max:55,  color:0x86d67a, blurb:'55 m/s'},
+  {id:'fast',    label:'Fast',    max:60,  color:0xf2c14e, blurb:'60 m/s'},
+  {id:'express', label:'Express', max:1e9, color:0xff7b86, blurb:'above 60 m/s'},
+];
+const tierOf = vel => TIERS.find(t => vel <= t.max);
+const GROUP_LABEL = {cns:'Spinal cord', roots:'Spinal nerve', cranial:'Cranial nerve', cervical:'Cervical plexus', brachial:'Brachial plexus', intercostal:'Intercostal nerve', lumbar:'Lumbar plexus', sacral:'Sacral plexus', autonomic:'Sympathetic trunk'};
+const KINDS = {bone:{label:'Bones', color:0xe9dfc8}, tooth:{label:'Teeth', color:0xf7f3ea}, cartilage:{label:'Cartilage', color:0x9db7c4}, disc:{label:'Spinal discs', color:0x7f9fb3},
+  brain:{label:'Brain', color:0xd8a59d}, organ:{label:'Heart, diaphragm, eyes', color:0xc0605a}, skin:{label:'Body outline', color:0x9fb6cc}};
+const KIND_WORD = {bone:'Bone', tooth:'Tooth', cartilage:'Cartilage', disc:'Intervertebral disc', brain:'Brain structure', organ:'Organ', nervemesh:'Cranial nerve (scanned)', skin:'Skin'};
+const slug = s => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+/* ---------- encoding and signatures ---------- */
+const B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+function b58enc(bytes){
+  let n = 0n; for (const b of bytes) n = (n << 8n) | BigInt(b);
+  let s = ''; while (n > 0n){ s = B58[Number(n % 58n)] + s; n /= 58n; }
+  for (const b of bytes){ if (b === 0) s = '1' + s; else break; }
+  return s;
+}
+function b58dec(str){
+  let n = 0n; for (const c of str){ const i = B58.indexOf(c); if (i < 0) throw new Error('not base58'); n = n * 58n + BigInt(i); }
+  const out = []; while (n > 0n){ out.unshift(Number(n & 255n)); n >>= 8n; }
+  for (const c of str){ if (c === '1') out.unshift(0); else break; }
+  return new Uint8Array(out);
+}
+const b64 = u => btoa(String.fromCharCode(...u)), unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+const enc = new TextEncoder();
+const ED = {
+  async verify(msg, sig, pub){
+    if (sig.length !== 64 || pub.length !== 32) return false;
+    if (window.nacl) return nacl.sign.detached.verify(msg, sig, pub);
+    const k = await crypto.subtle.importKey('raw', pub, {name:'Ed25519'}, false, ['verify']);
+    return crypto.subtle.verify({name:'Ed25519'}, k, sig, msg);
+  },
+  async practiceKey(){          // a throwaway key kept in this browser, for trying the game without a wallet
+    let saved = null; try { saved = JSON.parse(localStorage.getItem('myelin:practice')); } catch (e) {}
+    if (window.nacl){
+      const kp = saved && saved.seed ? nacl.sign.keyPair.fromSeed(unb64(saved.seed)) : nacl.sign.keyPair();
+      if (!(saved && saved.seed)){ const seed = kp.secretKey.slice(0, 32); try { localStorage.setItem('myelin:practice', JSON.stringify({seed:b64(seed)})); } catch (e) {} }
+      return {pub:kp.publicKey, sign:async m => nacl.sign.detached(m, kp.secretKey)};
+    }
+    let priv, pub;
+    if (saved && saved.pkcs8){ priv = await crypto.subtle.importKey('pkcs8', unb64(saved.pkcs8), {name:'Ed25519'}, false, ['sign']); pub = unb64(saved.pub); }
+    else { const kp = await crypto.subtle.generateKey({name:'Ed25519'}, true, ['sign', 'verify']); priv = kp.privateKey; pub = new Uint8Array(await crypto.subtle.exportKey('raw', kp.publicKey));
+      try { localStorage.setItem('myelin:practice', JSON.stringify({pkcs8:b64(new Uint8Array(await crypto.subtle.exportKey('pkcs8', priv))), pub:b64(pub)})); } catch (e) {} }
+    return {pub, sign:async m => new Uint8Array(await crypto.subtle.sign({name:'Ed25519'}, priv, m))};
+  },
+};
+
+/* ---------- receipts ---------- */
+const SITE = location.host || 'local';
+function buildMessage(wallet, nerveSlug, practice){
+  const nonce = [...crypto.getRandomValues(new Uint8Array(8))].map(b => b.toString(16).padStart(2, '0')).join('');
+  return ['MYELIN v1' + (practice ? ' practice' : ''), 'site: ' + SITE, 'wallet: ' + wallet, 'nerve: ' + nerveSlug, 'nonce: ' + nonce, 'ts: ' + new Date().toISOString().replace(/\.\d+Z$/, 'Z')].join('\n');
+}
+function parseMessage(m){
+  const lines = String(m).split('\n'); const head = lines[0];
+  if (head !== 'MYELIN v1' && head !== 'MYELIN v1 practice') return null;
+  const o = {practice:head.endsWith('practice')};
+  for (const l of lines.slice(1)){ const i = l.indexOf(': '); if (i < 0) return null; o[l.slice(0, i)] = l.slice(i + 2); }
+  return o.wallet && o.nerve && o.nonce && o.ts && o.site ? o : null;
+}
+async function verifyReceipt(r, pubkey){
+  try {
+    const f = parseMessage(r.message); if (!f || f.wallet !== pubkey || !bySlug[f.nerve]) return null;
+    const ok = await ED.verify(enc.encode(r.message), b58dec(r.signature), b58dec(pubkey));
+    return ok ? f : null;
+  } catch (e) { return null; }
+}
+
+/* ---------- wallet ---------- */
+let wallet = null;          // {name, pubkey, sign(bytes), practice}
+let receipts = {};          // nerve slug -> {message, signature}
+const storeKey = pk => 'myelin:v1:' + pk;
+/* Wallet Standard discovery, the route MetaMask, Backpack and other Solana wallets announce themselves by. No library needed. */
+const stdWallets = [];
+const stdApi = Object.freeze({register(...ws){ for (const w of ws) if (w && !stdWallets.includes(w)) stdWallets.push(w); try { if (!wallet && DATA) renderWallet(); } catch (err) {} return () => {}; }});
+try {
+  window.addEventListener('wallet-standard:register-wallet', e => { try { e.detail(stdApi); } catch (err) {} });
+  window.dispatchEvent(new CustomEvent('wallet-standard:app-ready', {detail:stdApi}));
+} catch (err) {}
+const isSol = x => x && Array.isArray(x.chains) && x.chains.some(c => String(c).startsWith('solana:'));
+function findProviders(){
+  const out = [];
+  for (const w of stdWallets){ const f = w.features || {}; if (isSol(w) && f['standard:connect'] && f['solana:signMessage'] && !out.some(o => o.name === w.name)) out.push({name:String(w.name), std:w}); }
+  const has = n => out.some(o => o.name.toLowerCase() === n.toLowerCase());
+  const ph = window.phantom && window.phantom.solana; if (ph && ph.isPhantom && !has('Phantom')) out.push({name:'Phantom', p:ph});
+  const sf = window.solflare; if (sf && sf.isSolflare && !has('Solflare')) out.push({name:'Solflare', p:sf});
+  return out;
+}
+async function connectStandard(name, w){
+  const res = await w.features['standard:connect'].connect();
+  const list = (res && res.accounts && res.accounts.length ? res.accounts : w.accounts) || [];
+  const acc = list.find(a => isSol(a) && (() => { try { return b58dec(a.address).length === 32; } catch (e) { return false; } })());
+  if (!acc) throw new Error(name + ' did not share a Solana account. Add or enable a Solana account in the wallet and try again.');
+  await setWallet({name, pubkey:acc.address, practice:false, provider:{disconnect:async () => { const d = w.features['standard:disconnect']; if (d) await d.disconnect(); }},
+    sign:async bytes => { const out = await w.features['solana:signMessage'].signMessage({account:acc, message:bytes}); const o = Array.isArray(out) ? out[0] : out; return new Uint8Array(o.signature); }});
+}
+async function connectProvider(name, p){
+  await p.connect();
+  const pk = p.publicKey && p.publicKey.toString(); if (!pk) throw new Error('The wallet did not share an address.');
+  await setWallet({name, pubkey:pk, practice:false, provider:p, sign:async bytes => { const r = await p.signMessage(bytes, 'utf8'); return new Uint8Array(r && r.signature ? r.signature : r); }});
+}
+async function connectPractice(){
+  const k = await ED.practiceKey();
+  await setWallet({name:'Practice key', pubkey:b58enc(k.pub), practice:true, sign:k.sign});
+}
+async function setWallet(w){
+  wallet = w; receipts = {};
+  if (w){
+    let saved = []; try { saved = JSON.parse(localStorage.getItem(storeKey(w.pubkey))) || []; } catch (e) {}
+    for (const r of saved){ const f = await verifyReceipt(r, w.pubkey); if (f && !receipts[f.nerve]) receipts[f.nerve] = {message:r.message, signature:r.signature}; }
+  }
+  renderWallet(); refreshAll(); if (w) $('left').classList.remove('open');
+}
+function save(){ if (!wallet) return; try { localStorage.setItem(storeKey(wallet.pubkey), JSON.stringify(Object.values(receipts))); } catch (e) {} }
+function renderWallet(){
+  const box = $('walletBox');
+  if (wallet){
+    box.innerHTML = `<div class="note"><div class="row" style="justify-content:space-between"><b>${esc(wallet.name)}</b><button id="discBtn">Disconnect</button></div>
+      <div class="mono sub" style="overflow-wrap:anywhere">${esc(wallet.pubkey)}</div>${wallet.practice ? '<div class="sub">Throwaway key stored in this browser. Receipts are marked practice.</div>' : ''}</div>`;
+    $('discBtn').onclick = async () => { try { if (wallet.provider && wallet.provider.disconnect) await wallet.provider.disconnect(); } catch (e) {} setWallet(null); };
+    return;
+  }
+  const provs = findProviders();
+  box.innerHTML = `<div style="display:flex;flex-direction:column;gap:6px">
+    ${provs.map((p, i) => `<button class="primary" data-prov="${i}">Connect ${p.name}</button>`).join('')}
+    ${provs.length ? '' : '<p class="sub">No Solana wallet found on this page. Wallet extensions do not appear inside previews or local files, so open the hosted version of this page to use Phantom, Solflare or MetaMask.</p>'}
+    <button id="pracBtn"${provs.length ? '' : ' class="primary"'}>Try with a practice key</button><p class="sub state bad" id="walletErr"></p></div>`;
+  box.querySelectorAll('[data-prov]').forEach(b => b.onclick = async () => { const p = provs[+b.dataset.prov];
+    try { if (p.std) await connectStandard(p.name, p.std); else await connectProvider(p.name, p.p); } catch (e) { $('walletErr').textContent = 'Connection was not approved. ' + (e && e.message ? e.message : ''); } });
+  $('pracBtn').onclick = () => connectPractice().catch(e => { $('walletErr').textContent = 'This browser cannot make a practice key (' + e.message + ').'; });
+}
+
+/* ---------- scene ---------- */
+const stage = $('stage');
+const renderer = new T.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+stage.appendChild(renderer.domElement);
+const scene = new T.Scene(); scene.background = new T.Color(0x0e1620);
+const camera = new T.PerspectiveCamera(32, 1, 0.01, 30); camera.position.set(0, 0.9, 3.5);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 0.88, 0); controls.enableDamping = true; controls.dampingFactor = 0.12; controls.minDistance = 0.03; controls.maxDistance = 9;
+scene.add(new T.HemisphereLight(0xdfe9f5, 0x2a3038, 1.15));
+const key = new T.DirectionalLight(0xfff4e0, 1.5); key.position.set(1.5, 2.5, 3); scene.add(key);
+const rim = new T.DirectionalLight(0x8fb8ff, 0.7); rim.position.set(-2, 1.5, -3); scene.add(rim);
+function resize(){ const w = stage.clientWidth, h = stage.clientHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+addEventListener('resize', resize); resize();
+
+const mats = {};
+for (const k in KINDS) mats[k] = new T.MeshStandardMaterial({color:KINDS[k].color, roughness:.72});
+mats.skin = new T.MeshBasicMaterial({color:KINDS.skin.color, transparent:true, opacity:.07, depthWrite:false, side:T.DoubleSide});
+mats.organ.transparent = true; mats.organ.opacity = .4; mats.organ.depthWrite = false;
+mats.nervemesh = new T.MeshStandardMaterial({color:0x8a94a0, roughness:.6});
+const dormantMat = new T.MeshStandardMaterial({color:0x55616e, roughness:.7});
+const tierMats = {}; for (const t of TIERS) tierMats[t.id] = new T.MeshStandardMaterial({color:t.color, roughness:.45, emissive:t.color, emissiveIntensity:.35});
+const selMat = new T.MeshStandardMaterial({color:0xffffff, emissive:0xf2c14e, emissiveIntensity:.75, roughness:.4});
+const selNerveMat = new T.MeshBasicMaterial({color:0xfff1b8, depthTest:false, transparent:true, opacity:.95});
+const ghostMat = new T.MeshStandardMaterial({color:0x9ff0d0, emissive:0x2f8f72, emissiveIntensity:.6, roughness:.5, depthTest:false, transparent:true});
+const pickMat = new T.MeshBasicMaterial({visible:false});
+const glowMat = new T.MeshBasicMaterial({color:0x7fe7ff, transparent:true, opacity:.95, depthTest:false});
+const trackMat = new T.MeshBasicMaterial({color:0x7fe7ff, transparent:true, opacity:.16, depthTest:false});
+
+const partMeshes = [], nerveObjs = {}, pickables = [], bySlug = {}, ghosts = [];
+let DATA;
+function toVecs(flat){ const a = []; for (let i = 0; i < flat.length; i += 3) a.push(new T.Vector3(flat[i], flat[i+1], flat[i+2])); return a; }
+function tube(pts, r, radial = 6){ return new T.TubeGeometry(new T.CatmullRomCurve3(pts, false, 'centripetal'), Math.min(500, Math.max(4, pts.length - 1)), r, radial, false); }
+function merge(geos){
+  let vc = 0, ic = 0; for (const g of geos){ vc += g.attributes.position.count; ic += g.index.count; }
+  const pos = new Float32Array(vc * 3), nor = new Float32Array(vc * 3), idx = new Uint32Array(ic); let vo = 0, io = 0;
+  for (const g of geos){ pos.set(g.attributes.position.array, vo * 3); nor.set(g.attributes.normal.array, vo * 3);
+    const gi = g.index.array; for (let i = 0; i < gi.length; i++) idx[io + i] = gi[i] + vo; vo += g.attributes.position.count; io += gi.length; g.dispose(); }
+  const out = new T.BufferGeometry(); out.setAttribute('position', new T.BufferAttribute(pos, 3)); out.setAttribute('normal', new T.BufferAttribute(nor, 3)); out.setIndex(new T.BufferAttribute(idx, 1)); return out;
+}
+
+async function load(){
+  const [dj, bin] = await Promise.all([
+    fetch('./data.json').then(r => { if (!r.ok) throw new Error('data ' + r.status); return r.json(); }),
+    fetch('./anatomy.json').then(r => { if (!r.ok) throw new Error('mesh ' + r.status); return r.json(); }).then(j => { const s = atob(j.b64), u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return u.buffer; }),
+  ]);
+  DATA = dj; $('loadBar').style.width = '60%'; $('loadMsg').textContent = 'Building the body';
+  await new Promise(r => setTimeout(r, 20));
+  DATA.parts.forEach((p, i) => {
+    const q = new Uint16Array(bin, p.po, p.vc * 3), pos = new Float32Array(p.vc * 3);
+    for (let a = 0; a < 3; a++){ const lo = p.lo[a], sc = (p.hi[a] - lo) / 65535; for (let j = a; j < pos.length; j += 3) pos[j] = lo + q[j] * sc; }
+    const g = new T.BufferGeometry(); g.setAttribute('position', new T.BufferAttribute(pos, 3));
+    g.setIndex(new T.BufferAttribute(p.big ? new Uint32Array(bin, p.io, p.ic) : new Uint16Array(bin, p.io, p.ic), 1));
+    g.computeVertexNormals(); g.computeBoundingSphere(); g.computeBoundingBox();
+    const m = new T.Mesh(g, mats[p.k]); m.userData = {type:'part', i, base:mats[p.k]};
+    if (p.k === 'skin') m.renderOrder = 5; else if (p.k === 'organ') m.renderOrder = 3; else pickables.push(m);
+    scene.add(m); partMeshes.push(m);
+  });
+  for (const n of DATA.nerves){
+    n.slug = slug(n.name); n.tier = tierOf(n.vel); bySlug[n.slug] = n;
+    const vis = [], pick = []; n.pts = n.lines.map(L => toVecs(L.p));
+    n.lines.forEach((L, j) => { const r = Math.max(L.r * 1.25, 0.0011); vis.push(tube(n.pts[j], r)); pick.push(tube(n.pts[j], r + 0.0035, 5)); });
+    if (n.ganglia) for (const c of toVecs(n.ganglia)) vis.push(new T.SphereGeometry(0.0032, 8, 6).translate(c.x, c.y, c.z));
+    const m = new T.Mesh(merge(vis), dormantMat); m.userData = {type:'nerve', id:n.id, base:dormantMat};
+    const pm = new T.Mesh(merge(pick), pickMat); pm.userData = m.userData;
+    scene.add(m, pm); pickables.push(pm); nerveObjs[n.id] = {n, m, pm};
+  }
+  buildGhosts(); buildUI(); setBoneOpacity(0.35); renderWallet(); refreshAll(); renderSel();
+  $('load').remove();
+}
+
+/* ---------- the nine bones the scan lacks: simple stand ins, hidden until 165 of 165 ---------- */
+function buildGhosts(){
+  const add = (name, geo, note) => { const m = new T.Mesh(geo, ghostMat); geo.computeBoundingBox(); m.visible = false; m.renderOrder = 12; m.userData = {type:'ghost', name, note, base:ghostMat}; scene.add(m); ghosts.push(m); };
+  const sac = DATA.parts.findIndex(p => p.n === 'Sacrum'); let tip = new T.Vector3(0, 0.861, -0.085);
+  if (sac >= 0){ const pos = partMeshes[sac].geometry.attributes.position, lo = DATA.parts[sac].lo[1]; const c = new T.Vector3(); let k = 0;
+    for (let i = 0; i < pos.count; i++) if (pos.getY(i) < lo + 0.006){ c.x += pos.getX(i); c.y += pos.getY(i); c.z += pos.getZ(i); k++; } if (k) tip = c.multiplyScalar(1 / k); }
+  const cg = []; for (let i = 0; i < 4; i++){ const r = 0.009 - i * 0.0018; cg.push(new T.SphereGeometry(r, 12, 8).scale(1.15, 0.75, 0.8).translate(0, tip.y - 0.006 - i * 0.0095, tip.z + 0.003 + i * 0.0045)); }
+  add('Coccyx', merge(cg), 'The tailbone: three to five small fused vertebrae below the sacrum.');
+  for (const [s, S] of [[-1, 'Right'], [1, 'Left']]){
+    const c = new T.CatmullRomCurve3([new T.Vector3(s * 0.010, 1.566, 0.038), new T.Vector3(s * 0.012, 1.563, 0.052), new T.Vector3(s * 0.011, 1.564, 0.066), new T.Vector3(s * 0.009, 1.567, 0.076)]);
+    add(S + ' inferior nasal concha', new T.TubeGeometry(c, 16, 0.0045, 8).scale(1, 1, 1), 'A thin curled shelf of bone on the side wall of the nose that warms and moistens incoming air.');
+    const e = new T.Vector3(s * 0.046, 1.588, -0.014);
+    const cap = (a, b, r) => new T.TubeGeometry(new T.LineCurve3(a, b), 2, r, 8);
+    add(S + ' malleus', merge([cap(e.clone().add(new T.Vector3(s * 0.004, 0.004, 0)), e.clone().add(new T.Vector3(s * 0.004, -0.004, 0.001)), 0.0009), new T.SphereGeometry(0.0016, 8, 6).translate(e.x + s * 0.004, e.y + 0.004, e.z)]), 'The hammer. It is attached to the eardrum and passes its vibration on.');
+    add(S + ' incus', merge([cap(e.clone().add(new T.Vector3(s * 0.002, 0.004, -0.001)), e.clone().add(new T.Vector3(0, -0.002, -0.001)), 0.0009), new T.SphereGeometry(0.0015, 8, 6).translate(e.x + s * 0.002, e.y + 0.004, e.z - 0.001)]), 'The anvil, the middle link of the chain.');
+    add(S + ' stapes', new T.TorusGeometry(0.0013, 0.00035, 6, 14).rotateY(Math.PI / 2).translate(e.x - s * 0.0025, e.y - 0.002, e.z - 0.001), 'The stirrup, the smallest bone in the body at about 3 mm. It pushes on the fluid of the inner ear.');
+  }
+}
+
+/* ---------- UI ---------- */
+function setBoneOpacity(o){
+  for (const k of ['bone', 'tooth', 'cartilage', 'disc']){ const m = mats[k]; m.transparent = o < 1; m.opacity = o; m.depthWrite = o > 0.5; m.needsUpdate = true; }
+  mats.brain.transparent = o < 0.6; mats.brain.opacity = o < 0.6 ? 0.45 : 1; mats.brain.depthWrite = o >= 0.6; mats.brain.needsUpdate = true;
+  $('boneOp').value = Math.round(o * 100);
+}
+$('boneOp').oninput = e => setBoneOpacity(e.target.value / 100);
+function buildUI(){
+  for (const k in KINDS){
+    const el = document.createElement('label'); el.className = 'layer';
+    el.innerHTML = `<input type="checkbox" id="lay_${k}" checked>${KINDS[k].label}`;
+    el.querySelector('input').onchange = e => partMeshes.forEach(m => { if (DATA.parts[m.userData.i].k === k) m.visible = e.target.checked; });
+    $('layers').appendChild(el);
+  }
+  $('q').oninput = renderColl; $('onlyTodo').onchange = renderColl;
+}
+function tab(name){ for (const t of ['Fire', 'Coll', 'Rec']){ $('tab' + t).classList.toggle('on', t === name); $('pane' + t).hidden = t !== name; } }
+$('tabFire').onclick = () => tab('Fire'); $('tabColl').onclick = () => tab('Coll'); $('tabRec').onclick = () => tab('Rec');
+$('contractBtn').onclick = () => $('contract').showModal(); $('aboutBtn').onclick = () => $('about').showModal();
+$('menuBtn').onclick = () => $('left').classList.toggle('open');
+
+function refreshAll(){
+  if (!DATA) return;
+  const done = Object.keys(receipts).length, total = DATA.nerves.length;
+  $('pN').textContent = done; $('pBar').style.width = (done / total * 100) + '%';
+  $('tiers').innerHTML = TIERS.map(t => { const all = DATA.nerves.filter(n => n.tier === t), d = all.filter(n => receipts[n.slug]).length;
+    return `<div class="tier"><span class="sw" style="background:${hex6(t.color)}"></span><span>${t.label} <span class="sub">${t.blurb}</span></span><span class="ct">${d}/${all.length}</span></div>`; }).join('');
+  for (const id in nerveObjs){ const o = nerveObjs[id]; o.m.userData.base = receipts[o.n.slug] ? tierMats[o.n.tier.id] : dormantMat; if (!(selected && selected.type === 'nerve' && selected.id === id)) o.m.material = o.m.userData.base; }
+  const unlocked = done >= total; ghosts.forEach(g => { g.visible = unlocked; });
+  ghosts.forEach(g => { const i = pickables.indexOf(g); if (unlocked && i < 0) pickables.push(g); if (!unlocked && i >= 0) pickables.splice(i, 1); });
+  $('ghostNote').innerHTML = unlocked
+    ? `<b>Unlocked: the nine missing bones.</b><div class="sub">Reconstructed by hand, not scanned.</div><div class="row" style="margin-top:6px"><button id="gEar">Show ear bones</button><button id="gNose">Nose</button><button id="gTail">Coccyx</button></div>`
+    : `<b>Locked: the nine missing bones.</b><div class="sub">The scan lacks the six ear ossicles, two nasal conchae and the coccyx. Fire all ${total} nerves to reveal hand made stand ins.</div>`;
+  if (unlocked){ $('gEar').onclick = () => { setBoneOpacity(0.15); frameBox(new T.Box3(new T.Vector3(-0.052, 1.582, -0.02), new T.Vector3(-0.04, 1.594, -0.008)), new T.Vector3(-1, 0.1, 0.3), 2.4); };
+    $('gNose').onclick = () => { setBoneOpacity(0.15); frameBox(new T.Box3(new T.Vector3(-0.02, 1.55, 0.03), new T.Vector3(0.02, 1.58, 0.08)), new T.Vector3(0.4, 0.1, 1), 1.3); };
+    $('gTail').onclick = () => { setBoneOpacity(0.5); frameBox(new T.Box3(new T.Vector3(-0.03, 0.81, -0.11), new T.Vector3(0.03, 0.88, -0.05)), new T.Vector3(0.5, 0.1, -1), 1.3); }; }
+  const exp = wallet && done ? JSON.stringify({myelin:1, pubkey:wallet.pubkey, receipts:Object.values(receipts)}, null, 1) : '';
+  $('expTxt').value = exp; $('expBtn').disabled = !exp;
+  renderColl(); renderSel();
+}
+function renderColl(){
+  if (!DATA) return;
+  const q = $('q').value.trim().toLowerCase(), todo = $('onlyTodo').checked, L = $('collList'); L.innerHTML = '';
+  for (const t of TIERS){
+    const rows = DATA.nerves.filter(n => n.tier === t && (!q || n.name.toLowerCase().includes(q)) && !(todo && receipts[n.slug]));
+    if (!rows.length) continue;
+    const h = document.createElement('div'); h.className = 'hd'; h.textContent = `${t.label}, ${t.blurb}`; L.appendChild(h);
+    for (const n of rows){ const b = document.createElement('button'); if (receipts[n.slug]) b.className = 'done';
+      b.innerHTML = `<span class="sw" style="background:${hex6(t.color)}"></span><span>${esc(n.name)}</span><small>${receipts[n.slug] ? 'fired' : n.vel + ' m/s'}</small>`;
+      b.onclick = () => { select({type:'nerve', id:n.id}, true); }; L.appendChild(b); }
+  }
+  if (!L.children.length) L.innerHTML = '<p class="sub">No nerve matches. Clear the filter to see all 165.</p>';
+}
+
+/* ---------- camera ---------- */
+let fly = null;
+function flyTo(target, dist, dir){ const d = dir ? dir.clone().normalize() : camera.position.clone().sub(controls.target).normalize();
+  fly = {t:0, t0:controls.target.clone(), p0:camera.position.clone(), t1:target.clone(), p1:target.clone().add(d.multiplyScalar(dist))}; }
+function frameBox(box, dir, pad = 1.25, minR = 0){
+  const s = new T.Sphere(); box.getBoundingSphere(s); s.radius = Math.max(s.radius, minR);
+  const fov = camera.fov * Math.PI / 180, h = Math.min(fov, 2 * Math.atan(Math.tan(fov / 2) * camera.aspect));
+  flyTo(s.center, Math.max(0.04, s.radius * pad / Math.sin(h / 2)), dir);
+}
+const VIEWS = {front:[0,0,1], back:[0,0,-1], left:[1,0,0], right:[-1,0,0]};
+document.querySelectorAll('#hud [data-view]').forEach(b => b.onclick = () => { const v = b.dataset.view;
+  if (v === 'all') frameBox(new T.Box3(new T.Vector3(-.34, 0, -.15), new T.Vector3(.34, 1.72, .15)), new T.Vector3(0, .02, 1), 1.05);
+  else if (v === 'head') frameBox(new T.Box3(new T.Vector3(-.09, 1.49, -.12), new T.Vector3(.09, 1.72, .1)), new T.Vector3(-.8, .15, 1));
+  else flyTo(controls.target, camera.position.distanceTo(controls.target), new T.Vector3(...VIEWS[v])); });
+
+/* ---------- picking and selection ---------- */
+const ray = new T.Raycaster(), mouse = new T.Vector2();
+let selected = null, hoverT = 0, down = null;
+function pick(ev){
+  const r = renderer.domElement.getBoundingClientRect(); mouse.set((ev.clientX - r.left) / r.width * 2 - 1, -(ev.clientY - r.top) / r.height * 2 + 1); ray.setFromCamera(mouse, camera);
+  const hits = ray.intersectObjects(pickables.filter(m => m.visible), false); let best = null, bd = 1e9;
+  for (const h of hits){ const u = h.object.userData; let d = h.distance;
+    if (u.type === 'nerve' || u.type === 'ghost') d -= 0.012; else if (mats[DATA.parts[u.i].k].opacity < 0.5) d += 0.05;
+    if (d < bd){ bd = d; best = u.type === 'ghost' ? {type:'ghost', g:h.object} : u; }
+    if (h.distance > hits[0].distance + 0.08) break; }
+  return best;
+}
+const labelOf = u => u.type === 'nerve' ? nerveObjs[u.id].n.name : u.type === 'ghost' ? u.g.userData.name + ' (reconstructed)' : DATA.parts[u.i].n;
+const meshOf = u => u.type === 'nerve' ? nerveObjs[u.id].m : u.type === 'ghost' ? u.g : partMeshes[u.i];
+renderer.domElement.addEventListener('pointerdown', e => { down = {x:e.clientX, y:e.clientY}; $('tip').style.display = 'none'; });
+renderer.domElement.addEventListener('pointerup', e => { if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 5) return; const u = pick(e); if (u) select(u, false); });
+renderer.domElement.addEventListener('pointermove', e => {
+  if (e.buttons || e.pointerType === 'touch') return; const now = performance.now(); if (now - hoverT < 70) return; hoverT = now;
+  const u = pick(e), tip = $('tip'); if (!u){ tip.style.display = 'none'; return; }
+  tip.textContent = labelOf(u); tip.style.display = 'block'; tip.style.left = Math.min(e.clientX + 14, innerWidth - 270) + 'px'; tip.style.top = (e.clientY + 14) + 'px'; });
+renderer.domElement.addEventListener('pointerleave', () => $('tip').style.display = 'none');
+
+let pending = null, fireErr = '';
+function select(u, focus){
+  if (selected){ const m = meshOf(selected); m.material = m.userData.base; m.renderOrder = 0; }
+  selected = u; pending = null; fireErr = '';
+  const m = meshOf(u); m.material = u.type === 'nerve' ? selNerveMat : selMat; if (u.type === 'nerve'){ m.renderOrder = 15; }
+  if (focus){ m.geometry.computeBoundingBox(); frameBox(m.geometry.boundingBox, null, 1.7, 0.05); }
+  renderSel(); tab('Fire'); $('left').classList.remove('open');
+}
+function renderSel(){
+  const box = $('selBox'); if (!DATA) return;
+  if (!selected){
+    box.innerHTML = `<h3>Pick a nerve</h3><p class="sub">Click any grey nerve on the body, or choose one from the Collection tab. Then fire it. Your wallet shows a short plain text message to sign, and the nerve lights up in the colour of its speed tier.</p>
+      <p class="sub">A good first one: <a href="#" id="firstPick">the right median nerve</a>, the one squeezed in carpal tunnel syndrome.</p>`;
+    $('firstPick').onclick = e => { e.preventDefault(); select({type:'nerve', id:'median_R'}, true); };
+    return;
+  }
+  if (selected.type === 'ghost'){ const g = selected.g.userData;
+    box.innerHTML = `<span class="chip">Reconstructed, not scanned</span><h3>${esc(g.name)}</h3><p>${esc(g.note)}</p><p class="sub">This bone is missing from the source scan. The shape here is a simple hand made stand in placed where the real bone sits.</p>`; return; }
+  if (selected.type === 'part'){ const p = DATA.parts[selected.i];
+    box.innerHTML = `<span class="chip">${KIND_WORD[p.k]}</span><h3>${esc(p.n)}</h3><p class="sub">Bones and brain parts are scenery in this game. Click a nerve to fire it.</p>`; return; }
+  const n = nerveObjs[selected.id].n, r = receipts[n.slug], f = r ? parseMessage(r.message) : null, t = n.len / n.vel * 1000;
+  let action;
+  if (r) action = `<p class="state ok">Myelinated for this wallet</p><pre class="msg">${esc(r.message)}</pre>
+      <dl class="kv"><dt>Signature</dt><dd class="mono">${esc(r.signature.slice(0, 22))}…</dd><dt>Stated time</dt><dd>${esc(f.ts)}, unverified</dd></dl>
+      <button id="replayBtn">Fire again, animation only</button>`;
+  else if (!wallet) action = `<p class="sub">Connect a wallet or start a practice key in the left panel to fire this nerve.</p><button class="primary" disabled>Fire this nerve</button>`;
+  else if (pending) action = `<p class="sub">Waiting for your wallet. It should show exactly this text:</p><pre class="msg">${esc(pending)}</pre>`;
+  else action = `<button class="primary" id="fireBtn">Fire this nerve</button><p class="sub">Your wallet will ask you to sign a plain text message. It is not a transaction and costs nothing.</p>${fireErr ? `<p class="state bad">${esc(fireErr)}</p>` : ''}`;
+  box.innerHTML = `<span class="chip"><span class="sw" style="background:${hex6(n.tier.color)}"></span>${n.tier.label} tier</span><h3>${esc(n.name)}</h3><p>${esc(n.desc)}</p>
+    <dl class="kv"><dt>Group</dt><dd>${GROUP_LABEL[n.group]}</dd><dt>Roots</dt><dd>${esc(n.roots)}</dd><dt>Fastest fibres</dt><dd>${n.vel} m/s, typical</dd><dt>End to end</dt><dd>${(n.len * 100).toFixed(0)} cm in ${t < 10 ? t.toFixed(1) : t.toFixed(0)} ms</dd></dl>${action}`;
+  if ($('fireBtn')) $('fireBtn').onclick = () => fire(n);
+  if ($('replayBtn')) $('replayBtn').onclick = () => fireNerve(n);
+}
+async function fire(n){
+  if (!wallet || pending || receipts[n.slug]) return;
+  const w = wallet, message = buildMessage(w.pubkey, n.slug, w.practice);
+  pending = message; fireErr = ''; renderSel();
+  try {
+    const sig = await w.sign(enc.encode(message));
+    if (wallet !== w) return;
+    const rec = {message, signature:b58enc(sig)};
+    if (!(await verifyReceipt(rec, w.pubkey))) throw new Error('The wallet returned a signature that does not match this message, so nothing was recorded.');
+    receipts[n.slug] = rec; save(); pending = null; refreshAll(); fireNerve(n);
+  } catch (e) {
+    pending = null; fireErr = /reject|denied|cancel/i.test(e && e.message || '') ? 'You declined the signature. Nothing was recorded.' : (e && e.message) || 'The wallet did not sign.'; renderSel();
+  }
+}
+
+/* ---------- receipts tab ---------- */
+$('expBtn').onclick = async () => { $('expTxt').select(); try { await navigator.clipboard.writeText($('expTxt').value); $('expMsg').textContent = 'Copied.'; } catch (e) { $('expMsg').textContent = 'Select the text below and copy it.'; } };
+$('impFile').onchange = async e => { const f = e.target.files[0]; if (f){ $('impTxt').value = await f.text(); $('impBtn').click(); } };
+$('impBtn').onclick = async () => {
+  const out = $('impOut'); let j;
+  try { j = JSON.parse($('impTxt').value); } catch (e) { out.innerHTML = '<p class="state bad">That is not valid JSON. Paste the whole receipt file, starting with { and ending with }.</p>'; return; }
+  if (!j || j.myelin !== 1 || typeof j.pubkey !== 'string' || !Array.isArray(j.receipts)){ out.innerHTML = '<p class="state bad">This is JSON, but not a MYELIN receipt file.</p>'; return; }
+  const good = {}, sites = new Set(); let bad = 0, practice = false;
+  for (const r of j.receipts.slice(0, 400)){ const f = await verifyReceipt(r, j.pubkey); if (f && !good[f.nerve]){ good[f.nerve] = f; sites.add(f.site); practice = practice || f.practice; } else if (!f) bad++; }
+  const have = Object.keys(good), mine = new Set(Object.keys(receipts)), extra = have.filter(s => !mine.has(s));
+  out.innerHTML = `<div class="note"><p class="state ${have.length ? 'ok' : 'bad'}">${have.length} of ${j.receipts.length} signatures valid</p>
+    <dl class="kv"><dt>Wallet</dt><dd class="mono">${esc(j.pubkey)}</dd><dt>Collection</dt><dd>${have.length} / ${DATA.nerves.length} nerves</dd>
+    <dt>By tier</dt><dd>${TIERS.map(t => `${t.label} ${have.filter(s => bySlug[s].tier === t).length}`).join(', ')}</dd>
+    <dt>Signed on</dt><dd>${[...sites].map(esc).join(', ') || 'none'}</dd>${practice ? '<dt>Note</dt><dd>Includes practice key receipts, which are not tied to a real wallet.</dd>' : ''}
+    ${bad ? `<dt>Rejected</dt><dd>${bad} with a bad signature, an unknown nerve, or a different wallet</dd>` : ''}
+    <dt>They have, you lack</dt><dd>${wallet ? (extra.length ? extra.slice(0, 12).map(s => esc(bySlug[s].name)).join(', ') + (extra.length > 12 ? ` and ${extra.length - 12} more` : '') : 'nothing') : 'connect to compare'}</dd></dl>
+    <p class="sub">Valid means the signature matches that wallet and message. Times inside receipts are stated by the signer and are not proof.</p></div>`;
+};
+
+/* ---------- signal animation ---------- */
+let sim = null;
+const pulseTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d'); const g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+  g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(.25, 'rgba(160,240,255,.9)'); g.addColorStop(1, 'rgba(127,231,255,0)'); x.fillStyle = g; x.fillRect(0, 0, 64, 64); return new T.CanvasTexture(c); })();
+function makeTrack(pts, r, t0, dur){
+  const cum = [0]; for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + pts[i].distanceTo(pts[i - 1]));
+  const g = tube(pts, Math.max(r * 1.5, 0.0024)), glow = new T.Mesh(g, glowMat); glow.renderOrder = 20; g.setDrawRange(0, 0);
+  const bg = new T.Mesh(g.clone(), trackMat); bg.renderOrder = 19;
+  const sp = new T.Sprite(new T.SpriteMaterial({map:pulseTex, blending:T.AdditiveBlending, depthTest:false, transparent:true})); sp.renderOrder = 21; sp.visible = false;
+  scene.add(bg, glow, sp); return {pts, cum, len:cum[cum.length - 1], t0, dur, glow, bg, sp, segs:g.parameters.tubularSegments};
+}
+function pointAt(tr, f){ const d = f * tr.len; let lo = 0, hi = tr.cum.length - 1; while (hi - lo > 1){ const m = (lo + hi) >> 1; if (tr.cum[m] <= d) lo = m; else hi = m; }
+  return tr.pts[lo].clone().lerp(tr.pts[hi], (d - tr.cum[lo]) / (tr.cum[hi] - tr.cum[lo] || 1)); }
+function clearSim(){ if (!sim) return; for (const tr of sim.tracks){ scene.remove(tr.glow, tr.bg, tr.sp); tr.glow.geometry.dispose(); tr.bg.geometry.dispose(); tr.sp.material.dispose(); } sim = null; $('simBox').hidden = true; }
+const fmtMs = s => { const ms = s * 1000; return ms >= 1000 ? (ms / 1000).toFixed(2) + ' s' : ms >= 100 ? ms.toFixed(0) + ' ms' : ms.toFixed(1) + ' ms'; };
+function fireNerve(n){
+  clearSim(); const tracks = [];
+  n.lines.forEach((ln, j) => { const pts = n.pts[j], len = pts.reduce((a, p, i) => i ? a + p.distanceTo(pts[i - 1]) : 0, 0); tracks.push(makeTrack(pts, ln.r, ln.d / n.vel, len / n.vel)); });
+  sim = {tracks, t:0, total:Math.max(...tracks.map(tr => tr.t0 + tr.dur)), show:5}; $('simBox').hidden = false;
+  const box = new T.Box3(); tracks.forEach(tr => tr.pts.forEach(p => box.expandByPoint(p))); frameBox(box, null, 1.25, 0.14);
+}
+function tickSim(dt){
+  if (!sim) return; const rate = sim.total / sim.show; sim.t = Math.min(sim.total, sim.t + dt * rate);
+  for (const tr of sim.tracks){ const f = Math.min(1, Math.max(0, (sim.t - tr.t0) / tr.dur));
+    tr.glow.geometry.setDrawRange(0, Math.floor(f * tr.segs) * 6 * tr.glow.geometry.parameters.radialSegments);
+    const live = sim.t >= tr.t0 && f < 1; tr.sp.visible = live;
+    if (live){ tr.sp.position.copy(pointAt(tr, f)); const k = camera.position.distanceTo(tr.sp.position) * 0.022 * (1 + 0.18 * Math.sin(performance.now() / 90)); tr.sp.scale.set(k, k, 1); } }
+  $('simT').textContent = fmtMs(sim.t); $('simSlow').textContent = `real travel time, shown ${Math.max(1, Math.round(1 / rate)).toLocaleString()}x slower`; $('simBar').style.width = (sim.t / sim.total * 100) + '%';
+  if (sim.t >= sim.total){ sim.hold = (sim.hold || 0) + dt; if (sim.hold > 1.5) clearSim(); }
+}
+
+let last = performance.now();
+function loop(now){
+  const raw = (now - last) / 1000, dt = Math.min(0.05, raw); last = now;
+  if (fly){ fly.t = Math.min(1, fly.t + raw / 0.8); const e = fly.t < .5 ? 2 * fly.t * fly.t : 1 - Math.pow(-2 * fly.t + 2, 2) / 2;
+    controls.target.lerpVectors(fly.t0, fly.t1, e); camera.position.lerpVectors(fly.p0, fly.p1, e); if (fly.t >= 1) fly = null; }
+  controls.update(); tickSim(dt); renderer.render(scene, camera); requestAnimationFrame(loop);
+}
+setTimeout(() => { if (!wallet && DATA) renderWallet(); }, 1500);
+load().then(() => requestAnimationFrame(loop)).catch(err => { $('loadMsg').textContent = 'The anatomy data did not load (' + err.message + '). Reload the page to try again.'; });
+</script>
+</body>
+</html>

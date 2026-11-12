@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nerve Signal Atlas</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* layout idea: a dark lightbox, the body in the centre, a map legend on the left, the signal console on the right */
+:root{
+  color-scheme:dark;
+  --ink:#0e1620;        /* lightbox background */
+  --panel:#16212dee;    /* console surfaces */
+  --line:#2a3a4b;       /* hairlines */
+  --text:#e6edf3;
+  --muted:#93a4b5;
+  --bone:#e9dfc8;       /* skeleton ivory */
+  --nerve:#f2c14e;      /* nerve yellow, the anatomical convention, and the accent */
+  --signal:#7fe7ff;     /* a travelling impulse */
+  --display:"Fraunces",Georgia,serif;
+  --body:"IBM Plex Sans",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--ink);color:var(--text);font:14px/1.5 var(--body);overflow:hidden}
+#stage{position:fixed;inset:0}
+#stage canvas{display:block;width:100%;height:100%;touch-action:none;cursor:grab}
+#stage canvas:active{cursor:grabbing}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer;background:none;border:1px solid var(--line);border-radius:6px;padding:6px 10px}
+button:hover{border-color:var(--muted)}
+button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:2px solid var(--signal);outline-offset:2px}
+button.on{background:var(--nerve);color:#1a1405;border-color:var(--nerve);font-weight:600}
+h1{font:600 22px/1.15 var(--display);margin:0;letter-spacing:.01em;text-wrap:balance}
+h2{font:600 12px/1.2 var(--body);letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin:0}
+h3{font:600 18px/1.2 var(--display);margin:0;text-wrap:balance}
+p{margin:0}
+.panel{position:fixed;top:16px;bottom:16px;width:300px;background:var(--panel);border:1px solid var(--line);border-radius:12px;backdrop-filter:blur(10px);display:flex;flex-direction:column;overflow:hidden}
+#left{left:16px}
+#right{right:16px;width:340px}
+.pad{padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.scroll{overflow-y:auto;flex:1;min-height:0;scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+.sep{border-top:1px solid var(--line)}
+.sub{color:var(--muted);font-size:12.5px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stat{border:1px solid var(--line);border-radius:8px;padding:6px 8px}
+.stat b{display:block;font:500 17px/1.2 var(--mono);font-variant-numeric:tabular-nums}
+.stat span{font-size:11px;color:var(--muted)}
+#q{width:100%;background:#0c131b;border:1px solid var(--line);border-radius:6px;padding:8px 10px}
+#results{display:flex;flex-direction:column}
+#results button{border:0;border-radius:4px;text-align:left;padding:5px 8px;display:flex;justify-content:space-between;gap:8px}
+#results button:hover{background:#ffffff10}
+#results small{color:var(--muted);white-space:nowrap}
+.layer{display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer}
+.layer input{accent-color:var(--nerve);width:15px;height:15px;margin:0}
+.sw{width:10px;height:10px;border-radius:50%;flex:none}
+.layer .ct{margin-left:auto;color:var(--muted);font:12px var(--mono);font-variant-numeric:tabular-nums}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+input[type=range]{accent-color:var(--nerve);flex:1;min-width:80px}
+.tabs{display:flex;border-bottom:1px solid var(--line)}
+.tabs button{flex:1;border:0;border-radius:0;padding:11px 8px;color:var(--muted);border-bottom:2px solid transparent}
+.tabs button.on{background:none;color:var(--text);border-bottom-color:var(--nerve)}
+.pathbtn{display:block;width:100%;text-align:left;padding:8px 10px}
+.pathbtn b{display:block;font-weight:600}
+.pathbtn span{color:var(--muted);font-size:12.5px}
+.pathbtn.on{background:#f2c14e1c;color:var(--text);border-color:var(--nerve);font-weight:400}
+.cat{font:500 11px var(--mono);color:var(--nerve);letter-spacing:.06em;text-transform:uppercase;margin-top:6px}
+.clock{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.clock b{font:500 30px/1 var(--mono);font-variant-numeric:tabular-nums;color:var(--signal)}
+.bar{height:6px;background:#0c131b;border-radius:3px;position:relative;overflow:hidden;border:1px solid var(--line)}
+.bar i{position:absolute;inset:0 auto 0 0;background:var(--signal);width:0}
+.steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
+.steps li{border-left:2px solid var(--line);padding:4px 0 4px 10px;color:var(--muted)}
+.steps li.now{border-color:var(--signal);color:var(--text)}
+.steps li.done{border-color:#3d7f8f}
+.steps li b{font-weight:600;display:block}
+.steps li small{font:12px var(--mono);font-variant-numeric:tabular-nums}
+.steps li p{font-size:13px;margin-top:4px;display:none}
+.steps li.now p{display:block}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:13px}
+.kv dt{color:var(--muted)}
+.kv dd{margin:0}
+.chip{display:inline-block;font:500 11px var(--mono);letter-spacing:.05em;text-transform:uppercase;border:1px solid var(--line);border-radius:99px;padding:2px 8px;color:var(--muted)}
+#hud{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);display:flex;gap:6px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:6px;backdrop-filter:blur(10px)}
+#hud button{border:0;padding:6px 10px}
+#hud button:hover{background:#ffffff12}
+#tip{position:fixed;pointer-events:none;background:#0c131bf2;border:1px solid var(--line);border-radius:6px;padding:4px 8px;font-size:12.5px;display:none;max-width:260px;z-index:5}
+#load{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:var(--ink);z-index:9;flex-direction:column;gap:10px}
+#load .bar{width:220px}
+dialog{background:#16212d;color:var(--text);border:1px solid var(--line);border-radius:12px;max-width:560px;padding:22px 24px}
+dialog::backdrop{background:#0008}
+dialog p,dialog li{max-width:65ch;margin:8px 0}
+dialog ul{padding-left:18px;margin:0}
+a{color:var(--signal)}
+.mob{display:none}
+@media (max-width:860px){
+  .panel{top:auto;left:8px!important;right:8px!important;width:auto!important;bottom:8px;max-height:46%}
+  #stage{bottom:44%}
+  #left{display:none;max-height:70%;z-index:4}
+  #left.open{display:flex}
+  #hud{bottom:auto;top:8px;max-width:calc(100% - 16px);overflow-x:auto}
+  .mob{display:inline-block}
+  .stats{grid-template-columns:repeat(3,1fr)}
+}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
+</style>
+<script type="importmap">{"imports":{"three":"./three.module.min.js"}}</script>
+</head>
+<body>
+<div id="stage"></div>
+
+<aside class="panel" id="left" aria-label="Map legend">
+  <div class="pad">
+    <h1>Nerve Signal Atlas</h1>
+    <p class="sub">Every bone, the major nerves, and the routes signals take between brain and body.</p>
+    <div class="stats">
+      <div class="stat"><b id="sBones">0</b><span>of 206 bones</span></div>
+      <div class="stat"><b id="sNerves">0</b><span>nerves</span></div>
+      <div class="stat"><b id="sBrain">0</b><span>brain parts</span></div>
+    </div>
+    <input id="q" type="search" placeholder="Search a bone, nerve or brain part" autocomplete="off" aria-label="Search structures">
+    <div id="results"></div>
+  </div>
+  <div class="sep"></div>
+  <div class="scroll"><div class="pad">
+    <h2>Structures</h2>
+    <div id="layersA"></div>
+    <div class="row"><label for="boneOp" class="sub">Bone opacity</label><input id="boneOp" type="range" min="8" max="100" value="100"></div>
+    <h2 style="margin-top:8px">Nerves</h2>
+    <div id="layersN"></div>
+    <button id="aboutBtn" style="margin-top:8px">Sources and limits</button>
+  </div></div>
+</aside>
+
+<aside class="panel" id="right" aria-label="Signal console">
+  <div class="tabs" role="tablist">
+    <button id="tabSig" class="on" role="tab">Signals</button>
+    <button id="tabSel" role="tab">Selected</button>
+  </div>
+  <div class="scroll" id="paneSig"><div class="pad">
+    <div id="simBox" hidden>
+      <h3 id="simName"></h3>
+      <p class="sub" id="simBlurb"></p>
+      <div class="clock"><b id="simT">0.0 ms</b><span class="sub" id="simSlow"></span></div>
+      <div class="bar"><i id="simBar"></i></div>
+      <div class="row">
+        <button id="simPlay">Pause</button>
+        <button id="simRestart">Restart</button>
+        <button id="simStop">Close</button>
+        <select id="simSpeed" aria-label="Playback speed" style="background:#0c131b;border:1px solid var(--line);border-radius:6px;padding:6px;margin-left:auto">
+          <option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="2">2x</option><option value="4">4x</option>
+        </select>
+      </div>
+      <ol class="steps" id="simSteps"></ol>
+      <div class="sep" style="margin:6px 0"></div>
+    </div>
+    <h2>Send a signal</h2>
+    <p class="sub">Pick a route. The clock shows the real travel time, the animation is slowed so you can follow it.</p>
+    <div id="pathList" style="display:flex;flex-direction:column;gap:6px"></div>
+  </div></div>
+  <div class="scroll" id="paneSel" hidden><div class="pad" id="selBox">
+    <p class="sub">Click any bone, nerve or brain part on the model, or search for one.</p>
+  </div></div>
+</aside>
+
+<div id="hud">
+  <button class="mob" id="legendBtn">Legend</button>
+  <button data-view="front">Front</button>
+  <button data-view="back">Back</button>
+  <button data-view="left">Left</button>
+  <button data-view="right">Right</button>
+  <button data-view="head">Head</button>
+  <button data-view="all">Whole body</button>
+</div>
+<div id="tip"></div>
+<div id="load"><h1>Nerve Signal Atlas</h1><p class="sub" id="loadMsg">Loading anatomy</p><div class="bar"><i id="loadBar"></i></div></div>
+
+<dialog id="about">
+  <h3>Sources and limits</h3>
+  <p><b>Bones and brain parts are real 3D data.</b> They come from BodyParts3D, © The Database Center for Life Science, licensed under CC Attribution 4.0 International, an adult male reference body built from MRI. Geometry was simplified for the browser by the open source Human Atlas project.</p>
+  <p><b>Nerve routes are schematic.</b> BodyParts3D has almost no peripheral nerves, so each nerve here is a curve drawn along the real bones following standard textbook anatomy: which roots it comes from, which side of which bone it runs on, where it branches. Positions are accurate to roughly a centimetre or two, good for learning routes, not for clinical use.</p>
+  <ul>
+    <li id="aboutBones"></li>
+    <li>Nerves included: the spinal cord, all 31 pairs of spinal nerves, all 12 pairs of cranial nerves, and the main named nerves of the cervical, brachial, lumbar and sacral plexuses, the intercostal nerves and the sympathetic trunks. Small unnamed twigs are not drawn.</li>
+    <li>The brain is mapped by region and by major pathway. A neuron by neuron map is not possible: the human brain has about 86 billion neurons and no complete wiring diagram of it exists. Full maps exist only for tiny animals, such as a roundworm with 302 neurons and a fruit fly with about 140,000.</li>
+    <li>Travel times use typical conduction speeds for each fibre type (about 100 m/s for the fastest reflex fibres, about 1 m/s for slow pain fibres) plus a short delay at each synapse. Real values vary between people and with temperature.</li>
+  </ul>
+  <p>A good free textbook for checking and going deeper is <a href="https://openstax.org/details/books/anatomy-and-physiology-2e">OpenStax Anatomy and Physiology</a>. Gray's Anatomy (1918 edition) is also in the public domain.</p>
+  <p class="sub">Educational model, not a diagnostic tool.</p>
+  <form method="dialog"><button>Close</button></form>
+</dialog>
+
+<script type="module">
+import * as T from 'three';
+import { OrbitControls } from './OrbitControls.js';
+
+const $ = id => document.getElementById(id);
+const GROUPS = {
+  cns:        {label:'Spinal cord',            color:0xf2c14e},
+  roots:      {label:'Spinal nerves, 31 pairs', color:0xe3a43a},
+  cranial:    {label:'Cranial nerves, 12 pairs',color:0xc79bf2},
+  cervical:   {label:'Cervical plexus',        color:0x86d67a},
+  brachial:   {label:'Brachial plexus, arm',   color:0xff9f5a},
+  intercostal:{label:'Intercostal nerves',     color:0x5fd3c8},
+  lumbar:     {label:'Lumbar plexus',          color:0x6aa9ff},
+  sacral:     {label:'Sacral plexus, leg',     color:0xff7b86},
+  autonomic:  {label:'Sympathetic trunks',     color:0xf08ad0},
+};
+const KINDS = {
+  bone:     {label:'Bones',               color:0xe9dfc8, on:true},
+  tooth:    {label:'Teeth',               color:0xf7f3ea, on:true},
+  cartilage:{label:'Cartilage',           color:0x9db7c4, on:true},
+  disc:     {label:'Spinal discs',        color:0x7f9fb3, on:true},
+  brain:    {label:'Brain',               color:0xd8a59d, on:true},
+  organ:    {label:'Heart, diaphragm, eyes', color:0xc0605a, on:true},
+  skin:     {label:'Body outline',        color:0x9fb6cc, on:true},
+};
+const KIND_WORD = {bone:'Bone', tooth:'Tooth', cartilage:'Cartilage', disc:'Intervertebral disc', brain:'Brain structure', organ:'Organ', nervemesh:'Cranial nerve (scanned)', skin:'Skin'};
+
+/* ---------- scene ---------- */
+const stage = $('stage');
+const renderer = new T.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+stage.appendChild(renderer.domElement);
+const scene = new T.Scene();
+scene.background = new T.Color(0x0e1620);
+const camera = new T.PerspectiveCamera(32, 1, 0.01, 30);
+camera.position.set(0, 0.9, 3.5);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 0.88, 0); controls.enableDamping = true; controls.dampingFactor = 0.12;
+controls.minDistance = 0.08; controls.maxDistance = 9;
+scene.add(new T.HemisphereLight(0xdfe9f5, 0x2a3038, 1.15));
+const key = new T.DirectionalLight(0xfff4e0, 1.5); key.position.set(1.5, 2.5, 3); scene.add(key);
+const rim = new T.DirectionalLight(0x8fb8ff, 0.7); rim.position.set(-2, 1.5, -3); scene.add(rim);
+function resize(){ const w = stage.clientWidth, h = stage.clientHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+addEventListener('resize', resize); resize();
+
+const mats = {};
+for (const k in KINDS) mats[k] = new T.MeshStandardMaterial({color:KINDS[k].color, roughness:.72, metalness:0});
+mats.skin = new T.MeshBasicMaterial({color:KINDS.skin.color, transparent:true, opacity:.07, depthWrite:false, side:T.DoubleSide});
+mats.organ.transparent = true; mats.organ.opacity = .4; mats.organ.depthWrite = false;
+mats.brain.roughness = .85;
+mats.nervemesh = new T.MeshStandardMaterial({color:GROUPS.cranial.color, roughness:.6});
+const nerveMats = {};
+for (const g in GROUPS) nerveMats[g] = new T.MeshStandardMaterial({color:GROUPS[g].color, roughness:.5, emissive:GROUPS[g].color, emissiveIntensity:.18});
+const hiMat = new T.MeshStandardMaterial({color:0x7fe7ff, emissive:0x2aa7c7, emissiveIntensity:.9, roughness:.4});
+const selMat = new T.MeshStandardMaterial({color:0xffffff, emissive:0xf2c14e, emissiveIntensity:.75, roughness:.4});
+const selNerveMat = new T.MeshBasicMaterial({color:0xfff1b8, depthTest:false, transparent:true, opacity:.95});
+const pickMat = new T.MeshBasicMaterial({visible:false});
+const glowMat = new T.MeshBasicMaterial({color:0x7fe7ff, transparent:true, opacity:.95, depthTest:false});
+const trackMat = new T.MeshBasicMaterial({color:0x7fe7ff, transparent:true, opacity:.16, depthTest:false});
+
+const partMeshes = [], nerveObjs = {}, pickables = [];
+let DATA;
+
+function toVecs(flat){ const a = []; for (let i = 0; i < flat.length; i += 3) a.push(new T.Vector3(flat[i], flat[i+1], flat[i+2])); return a; }
+function tube(pts, r, radial = 6){
+  const curve = new T.CatmullRomCurve3(pts, false, 'centripetal');
+  const n = Math.min(500, Math.max(4, pts.length - 1));
+  return new T.TubeGeometry(curve, n, r, radial, false);
+}
+function merge(geos){
+  let vc = 0, ic = 0; for (const g of geos){ vc += g.attributes.position.count; ic += g.index.count; }
+  const pos = new Float32Array(vc * 3), nor = new Float32Array(vc * 3), idx = new Uint32Array(ic);
+  let vo = 0, io = 0;
+  for (const g of geos){
+    pos.set(g.attributes.position.array, vo * 3); nor.set(g.attributes.normal.array, vo * 3);
+    const gi = g.index.array; for (let i = 0; i < gi.length; i++) idx[io + i] = gi[i] + vo;
+    vo += g.attributes.position.count; io += gi.length; g.dispose();
+  }
+  const out = new T.BufferGeometry();
+  out.setAttribute('position', new T.BufferAttribute(pos, 3)); out.setAttribute('normal', new T.BufferAttribute(nor, 3)); out.setIndex(new T.BufferAttribute(idx, 1));
+  return out;
+}
+
+async function load(){
+  const [dj, bin] = await Promise.all([
+    fetch('./data.json').then(r => { if (!r.ok) throw new Error('data ' + r.status); return r.json(); }),
+    fetch('./anatomy.json').then(r => { if (!r.ok) throw new Error('mesh ' + r.status); return r.json(); }).then(j => {
+      const s = atob(j.b64), u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return u.buffer; }),
+  ]);
+  DATA = dj; $('loadBar').style.width = '60%'; $('loadMsg').textContent = 'Building the body';
+  await new Promise(r => setTimeout(r, 20));
+  DATA.parts.forEach((p, i) => {
+    const q = new Uint16Array(bin, p.po, p.vc * 3), pos = new Float32Array(p.vc * 3);
+    for (let a = 0; a < 3; a++){ const lo = p.lo[a], sc = (p.hi[a] - lo) / 65535; for (let j = a; j < pos.length; j += 3) pos[j] = lo + q[j] * sc; }
+    const g = new T.BufferGeometry();
+    g.setAttribute('position', new T.BufferAttribute(pos, 3));
+    g.setIndex(new T.BufferAttribute(p.big ? new Uint32Array(bin, p.io, p.ic) : new Uint16Array(bin, p.io, p.ic), 1));
+    g.computeVertexNormals(); g.computeBoundingSphere(); g.computeBoundingBox();
+    const m = new T.Mesh(g, mats[p.k]);
+    m.userData = {type:'part', i, base:mats[p.k]};
+    if (p.k === 'skin') m.renderOrder = 5; else if (p.k === 'organ') m.renderOrder = 3; else pickables.push(m);
+    scene.add(m); partMeshes.push(m);
+  });
+  for (const n of DATA.nerves){
+    const vis = [], pick = [];
+    n.pts = n.lines.map(L => toVecs(L.p));
+    n.lines.forEach((L, j) => { const r = Math.max(L.r * 1.25, 0.0011); vis.push(tube(n.pts[j], r)); pick.push(tube(n.pts[j], r + 0.0035, 5)); });
+    if (n.ganglia) for (const c of toVecs(n.ganglia)){ const s = new T.SphereGeometry(0.0032, 8, 6).translate(c.x, c.y, c.z); vis.push(s.index ? s : s.toNonIndexed()); }
+    const m = new T.Mesh(merge(vis), nerveMats[n.group]); m.userData = {type:'nerve', id:n.id, base:nerveMats[n.group]};
+    const pm = new T.Mesh(merge(pick), pickMat); pm.userData = m.userData;
+    scene.add(m, pm); pickables.push(pm); nerveObjs[n.id] = {n, m, pm};
+  }
+  buildUI();
+  $('load').remove();
+}
+
+/* ---------- legend ---------- */
+const BONE_NOTE = [
+  [/femur/, 'The longest and strongest bone in the body.'], [/patella/, 'The kneecap, the largest sesamoid bone. It gives the quadriceps better leverage.'],
+  [/^atlas/, 'C1. It carries the skull and lets you nod.'], [/^axis/, 'C2. Its peg, the dens, is the pivot that lets the head turn.'],
+  [/hyoid/, 'The only bone that does not touch another bone. It anchors the tongue.'], [/mandible/, 'The lower jaw, the only freely movable bone of the skull.'],
+  [/sacrum/, 'Five vertebrae fused into one bone that locks the spine into the pelvis.'], [/hip bone/, 'Ilium, ischium and pubis fused together.'],
+  [/calcaneus/, 'The heel bone, the largest bone of the foot.'], [/scaphoid/, 'The most often fractured wrist bone.'], [/clavicle/, 'The collarbone, a strut that holds the shoulder out from the chest.'],
+  [/tibia/, 'The shin bone. It carries nearly all the weight of the leg.'], [/fibula/, 'Slender outer leg bone, mostly for muscle attachment and ankle stability.'],
+  [/humerus/, 'The upper arm bone. The radial nerve spirals around its back.'], [/radius/, 'Thumb side forearm bone. It rotates around the ulna to turn the palm.'], [/ulna/, 'Little finger side forearm bone. Its hook forms the point of the elbow.'],
+  [/scapula/, 'The shoulder blade.'], [/sternum|manubrium|xiphoid/, 'Part of the breastbone.'], [/talus/, 'Sits between the leg and the heel and carries body weight across the ankle.'],
+];
+const BRAIN_NOTE = [
+  [/precentral/, 'Primary motor cortex. Each patch commands one body part on the opposite side, feet near the top, face low on the side.'],
+  [/postcentral/, 'Primary somatosensory cortex. Touch, pain and position sense from the opposite side of the body arrive here.'],
+  [/occipital/, 'Visual cortex.'], [/superior temporal/, 'Hearing. On the left, the back part is also key to understanding speech.'],
+  [/inferior frontal/, 'On the left this includes the speech production area.'], [/hippocampus/, 'Needed to form new long term memories.'], [/amygdala/, 'Fear and emotional memory.'],
+  [/hypothalamus/, 'Master control of hormones, temperature, hunger, thirst and the body clock.'], [/thalamus/, 'The relay station. Almost every sense passes through here on the way to the cortex.'],
+  [/cerebellum/, 'Coordination, balance and the fine timing of movement.'], [/medulla/, 'Runs breathing, heart rate and blood pressure. Motor fibres cross sides here.'],
+  [/pons/, 'Bridge between cerebrum, cerebellum and cord. Home of the nuclei for cranial nerves V to VIII.'], [/midbrain|peduncle/, 'Top of the brainstem. Carries the motor tracts and controls eye movements.'],
+  [/corpus callosum/, 'About 200 million fibres joining the two hemispheres.'], [/caudate|putamen|globus/, 'Part of the basal ganglia, which help select and start movements.'],
+  [/internal capsule/, 'The fibre highway between cortex and brainstem. Almost all motor and sensory traffic passes through it.'], [/cingulate/, 'Emotion, attention and the feeling of effort.'],
+  [/insula/, 'Taste and awareness of the inner state of the body.'], [/fornix/, 'Output cable of the hippocampus, part of the memory circuit.'], [/optic chiasm/, 'Where half of each optic nerve crosses to the other side.'],
+  [/optic tract|optic nerve/, 'Part of the visual pathway.'], [/superior colliculus/, 'Reflex eye and head movements toward sights and sounds.'], [/inferior colliculus/, 'Relay of the hearing pathway.'],
+  [/lateral geniculate/, 'Thalamic relay for vision.'], [/medial geniculate/, 'Thalamic relay for hearing.'], [/fusiform/, 'Recognition of faces and objects.'], [/parahippocampal/, 'Memory for places and scenes.'],
+  [/angular/, 'Reading, number and linking the senses.'], [/supramarginal/, 'Language and the sense of where the limbs are.'], [/superior parietal/, 'Spatial awareness and guiding the hand by sight.'],
+  [/frontal gyrus/, 'Planning, working memory and control of voluntary eye movement.'], [/temporal gyrus/, 'Recognising objects and the meaning of words.'], [/white matter/, 'The wiring: bundles of insulated axons linking areas of cortex with each other and with deeper structures.'],
+  [/mammillary/, 'Part of the memory circuit.'], [/orbital/, 'Reward and decision making.'], [/commissure/, 'A bundle of fibres crossing between the two hemispheres.'], [/aqueduct|canal/, 'A channel for cerebrospinal fluid.'],
+];
+function note(list, base){ for (const [re, t] of list) if (re.test(base)) return t; return ''; }
+function baseName(n){ return n.toLowerCase().replace(/\b(left|right)\b/g, '').replace(/\s+/g, ' ').trim(); }
+function cap(s){ return s.charAt(0).toUpperCase() + s.slice(1); }
+
+function buildUI(){
+  const cnt = {}; DATA.parts.forEach(p => cnt[p.k] = (cnt[p.k] || 0) + 1);
+  const names = new Set(DATA.parts.filter(p => p.k === 'bone').map(p => p.n.toLowerCase()));
+  let bones = 0; for (const n of names){ if (/sesamoid|body of sternum|xiphoid/.test(n)) continue; bones++; }
+  bones -= [...names].filter(n => /hyoid/.test(n)).length > 1 ? 1 : 0;
+  $('sBones').textContent = bones; $('sNerves').textContent = DATA.nerves.length; $('sBrain').textContent = cnt.brain;
+  $('aboutBones').textContent = `Bones: ${bones} of the 206 adult bones are present as separate meshes. Not in the source data: the six ear ossicles, the two inferior nasal conchae and a separate coccyx. The sternum appears as three pieces and four foot sesamoids are shown as extras.`;
+  for (const k in KINDS){
+    const el = document.createElement('label'); el.className = 'layer';
+    el.innerHTML = `<input type="checkbox" id="lay_${k}" ${KINDS[k].on ? 'checked' : ''}><span class="sw" style="background:#${KINDS[k].color.toString(16).padStart(6,'0')}"></span>${KINDS[k].label}<span class="ct">${cnt[k] || 0}</span>`;
+    el.querySelector('input').onchange = e => { partMeshes.forEach(m => { if (DATA.parts[m.userData.i].k === k) m.visible = e.target.checked; }); };
+    $('layersA').appendChild(el);
+  }
+  const gc = {}; DATA.nerves.forEach(n => gc[n.group] = (gc[n.group] || 0) + 1);
+  for (const g in GROUPS){
+    const el = document.createElement('label'); el.className = 'layer';
+    el.innerHTML = `<input type="checkbox" id="lay_${g}" checked><span class="sw" style="background:#${GROUPS[g].color.toString(16).padStart(6,'0')}"></span>${GROUPS[g].label}<span class="ct">${gc[g] || 0}</span>`;
+    el.querySelector('input').onchange = e => {
+      for (const id in nerveObjs){ const o = nerveObjs[id]; if (o.n.group === g){ o.m.visible = o.pm.visible = e.target.checked; } }
+      if (g === 'cranial') partMeshes.forEach(m => { if (DATA.parts[m.userData.i].k === 'nervemesh') m.visible = e.target.checked; });
+    };
+    $('layersN').appendChild(el);
+  }
+  let cat = '';
+  for (const P of DATA.paths){
+    if (P.cat !== cat){ cat = P.cat; const c = document.createElement('div'); c.className = 'cat'; c.textContent = cat; $('pathList').appendChild(c); }
+    const b = document.createElement('button'); b.className = 'pathbtn'; b.id = 'pb_' + P.id;
+    b.innerHTML = `<b>${P.name}</b><span>${P.blurb}</span>`;
+    b.onclick = () => startPath(P);
+    $('pathList').appendChild(b);
+  }
+}
+$('boneOp').oninput = e => setBoneOpacity(e.target.value / 100);
+function setBoneOpacity(o){
+  for (const k of ['bone', 'tooth', 'cartilage', 'disc']){ const m = mats[k]; m.transparent = o < 1; m.opacity = o; m.depthWrite = o > 0.5; m.needsUpdate = true; }
+  mats.brain.transparent = o < 0.6; mats.brain.opacity = o < 0.6 ? 0.45 : 1; mats.brain.depthWrite = o >= 0.6; mats.brain.needsUpdate = true;
+  $('boneOp').value = Math.round(o * 100);
+}
+$('aboutBtn').onclick = () => $('about').showModal();
+$('legendBtn').onclick = () => $('left').classList.toggle('open');
+function tab(sel){ $('tabSel').classList.toggle('on', sel); $('tabSig').classList.toggle('on', !sel); $('paneSel').hidden = !sel; $('paneSig').hidden = sel; }
+$('tabSig').onclick = () => tab(false); $('tabSel').onclick = () => tab(true);
+
+/* ---------- search ---------- */
+$('q').oninput = () => {
+  const q = $('q').value.trim().toLowerCase(), R = $('results'); R.innerHTML = '';
+  if (q.length < 2) return;
+  const hits = [];
+  for (const n of DATA.nerves) if (n.name.toLowerCase().includes(q)) hits.push({t:n.name, s:'nerve', f:() => select({type:'nerve', id:n.id}, true)});
+  DATA.parts.forEach((p, i) => { if (p.k !== 'skin' && p.n.toLowerCase().includes(q)) hits.push({t:p.n, s:KIND_WORD[p.k].toLowerCase(), f:() => select({type:'part', i}, true)}); });
+  hits.sort((a, b) => a.t.toLowerCase().indexOf(q) - b.t.toLowerCase().indexOf(q) || a.t.length - b.t.length);
+  for (const h of hits.slice(0, 9)){ const b = document.createElement('button'); b.innerHTML = `<span>${h.t}</span><small>${h.s}</small>`; b.onclick = () => { h.f(); $('left').classList.remove('open'); }; R.appendChild(b); }
+  if (!hits.length) R.innerHTML = '<p class="sub" style="padding:4px 8px">Nothing by that name. Try a shorter word, such as "median" or "rib".</p>';
+};
+
+/* ---------- camera ---------- */
+let fly = null;
+function flyTo(target, dist, dir){
+  const d = dir ? dir.clone().normalize() : camera.position.clone().sub(controls.target).normalize();
+  fly = {t:0, t0:controls.target.clone(), p0:camera.position.clone(), t1:target.clone(), p1:target.clone().add(d.multiplyScalar(dist))};
+}
+function frameBox(box, dir, pad = 1.25, minR = 0){
+  const s = new T.Sphere(); box.getBoundingSphere(s); s.radius = Math.max(s.radius, minR);
+  const fov = camera.fov * Math.PI / 180, h = Math.min(fov, 2 * Math.atan(Math.tan(fov / 2) * camera.aspect));
+  flyTo(s.center, Math.max(0.12, s.radius * pad / Math.sin(h / 2)), dir);
+}
+const VIEWS = {front:[0,0,1], back:[0,0,-1], left:[1,0,0], right:[-1,0,0]};
+document.querySelectorAll('#hud [data-view]').forEach(b => b.onclick = () => {
+  const v = b.dataset.view;
+  if (v === 'all') frameBox(new T.Box3(new T.Vector3(-.34, 0, -.15), new T.Vector3(.34, 1.72, .15)), new T.Vector3(0, .02, 1), 1.05);
+  else if (v === 'head') frameBox(new T.Box3(new T.Vector3(-.09, 1.49, -.12), new T.Vector3(.09, 1.72, .1)), new T.Vector3(-.8, .15, 1));
+  else flyTo(controls.target, camera.position.distanceTo(controls.target), new T.Vector3(...VIEWS[v]));
+});
+
+/* ---------- picking ---------- */
+const ray = new T.Raycaster(), mouse = new T.Vector2();
+let selected = null, hoverT = 0, down = null;
+function pick(ev){
+  const r = renderer.domElement.getBoundingClientRect();
+  mouse.set((ev.clientX - r.left) / r.width * 2 - 1, -(ev.clientY - r.top) / r.height * 2 + 1);
+  ray.setFromCamera(mouse, camera);
+  const hits = ray.intersectObjects(pickables.filter(m => m.visible), false);
+  let best = null, bd = 1e9;
+  for (const h of hits){
+    const u = h.object.userData; let d = h.distance;
+    if (u.type === 'nerve') d -= 0.012;
+    else if (mats[DATA.parts[u.i].k].opacity < 0.5) d += 0.05;
+    if (d < bd){ bd = d; best = u; }
+    if (h.distance > hits[0].distance + 0.08) break;
+  }
+  return best;
+}
+function labelOf(u){ return u.type === 'nerve' ? nerveObjs[u.id].n.name : DATA.parts[u.i].n; }
+renderer.domElement.addEventListener('pointerdown', e => { down = {x:e.clientX, y:e.clientY}; $('tip').style.display = 'none'; });
+renderer.domElement.addEventListener('pointerup', e => {
+  if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 5) return;
+  const u = pick(e); if (u) select(u, false);
+});
+renderer.domElement.addEventListener('pointermove', e => {
+  if (e.buttons || e.pointerType === 'touch') return;
+  const now = performance.now(); if (now - hoverT < 70) return; hoverT = now;
+  const u = pick(e), tip = $('tip');
+  if (!u){ tip.style.display = 'none'; return; }
+  tip.textContent = labelOf(u); tip.style.display = 'block';
+  tip.style.left = Math.min(e.clientX + 14, innerWidth - 270) + 'px'; tip.style.top = (e.clientY + 14) + 'px';
+});
+renderer.domElement.addEventListener('pointerleave', () => $('tip').style.display = 'none');
+
+function meshOf(u){ return u.type === 'nerve' ? nerveObjs[u.id].m : partMeshes[u.i]; }
+function select(u, focus){
+  if (selected) meshOf(selected).material = meshOf(selected).userData.base;
+  if (selected) meshOf(selected).renderOrder = 0;
+  selected = u; const m = meshOf(u); m.material = u.type === 'nerve' ? selNerveMat : selMat; m.visible = true; if (u.type === 'nerve') m.renderOrder = 15;
+  if (focus){ m.geometry.computeBoundingBox(); frameBox(m.geometry.boundingBox, null, 1.7); }
+  const box = $('selBox');
+  if (u.type === 'nerve'){
+    const n = nerveObjs[u.id].n, g = GROUPS[n.group];
+    const t = n.len / n.vel * 1000;
+    box.innerHTML = `<span class="chip">${g.label}</span><h3>${n.name}</h3><p>${n.desc}</p>
+      <dl class="kv"><dt>Roots</dt><dd>${n.roots}</dd><dt>Carries</dt><dd>${{mixed:'Motor and sensory fibres', motor:'Motor fibres', sensory:'Sensory fibres', autonomic:'Autonomic fibres'}[n.kind]}</dd>
+      <dt>Length drawn</dt><dd>${(n.len * 100).toFixed(0)} cm</dd><dt>Typical speed</dt><dd>${n.vel} m/s, fastest fibres</dd><dt>End to end</dt><dd>${t < 10 ? t.toFixed(1) : t.toFixed(0)} ms</dd></dl>
+      <div class="row"><button id="fireOut">Fire outward</button><button id="fireIn">Fire inward</button></div>
+      <p class="sub">Outward is a command leaving the brain or cord. Inward is a sensation returning to it.</p>`;
+    $('fireOut').onclick = () => fireNerve(n, false); $('fireIn').onclick = () => fireNerve(n, true);
+  } else {
+    const p = DATA.parts[u.i], b = baseName(p.n);
+    const txt = p.k === 'bone' ? note(BONE_NOTE, b) : p.k === 'brain' ? note(BRAIN_NOTE, b) : p.k === 'nervemesh' ? 'This piece of nerve is real scanned geometry from the source atlas.' : '';
+    const size = Math.max(p.hi[0] - p.lo[0], p.hi[1] - p.lo[1], p.hi[2] - p.lo[2]) * 100;
+    box.innerHTML = `<span class="chip">${KIND_WORD[p.k]}</span><h3>${p.n}</h3>${txt ? `<p>${txt}</p>` : ''}
+      <dl class="kv">${p.g ? `<dt>Region</dt><dd>${p.g}</dd>` : ''}${p.s ? `<dt>Side</dt><dd>${p.s === 'L' ? 'Left' : 'Right'}</dd>` : ''}<dt>Largest span</dt><dd>${size.toFixed(1)} cm</dd><dt>Atlas ID</dt><dd>${p.fma}</dd></dl>`;
+  }
+  tab(true);
+}
+
+/* ---------- signals ---------- */
+let sim = null;
+const pulseTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d'); const g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+  g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(.25, 'rgba(160,240,255,.9)'); g.addColorStop(1, 'rgba(127,231,255,0)'); x.fillStyle = g; x.fillRect(0, 0, 64, 64); return new T.CanvasTexture(c); })();
+function makeTrack(pts, r, t0, dur){
+  const cum = [0]; for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + pts[i].distanceTo(pts[i - 1]));
+  const g = tube(pts, Math.max(r * 1.5, 0.0024)), segs = g.parameters.tubularSegments;
+  const glow = new T.Mesh(g, glowMat); glow.renderOrder = 20; g.setDrawRange(0, 0);
+  const bg = new T.Mesh(g.clone(), trackMat); bg.renderOrder = 19;
+  const sp = new T.Sprite(new T.SpriteMaterial({map:pulseTex, blending:T.AdditiveBlending, depthTest:false, transparent:true})); sp.renderOrder = 21; sp.visible = false;
+  scene.add(bg, glow, sp);
+  return {pts, cum, len:cum[cum.length - 1], t0, dur, glow, bg, sp, segs};
+}
+function pointAt(tr, f){
+  const d = f * tr.len; let lo = 0, hi = tr.cum.length - 1;
+  while (hi - lo > 1){ const m = (lo + hi) >> 1; if (tr.cum[m] <= d) lo = m; else hi = m; }
+  const span = tr.cum[hi] - tr.cum[lo] || 1; return tr.pts[lo].clone().lerp(tr.pts[hi], (d - tr.cum[lo]) / span);
+}
+function clearSim(){
+  if (!sim) return;
+  for (const tr of sim.tracks){ scene.remove(tr.glow, tr.bg, tr.sp); tr.glow.geometry.dispose(); tr.bg.geometry.dispose(); tr.sp.material.dispose(); }
+  setHL([]); document.querySelectorAll('.pathbtn.on').forEach(b => b.classList.remove('on'));
+  if (sim.prevOp != null) setBoneOpacity(sim.prevOp);
+  sim = null; $('simBox').hidden = true;
+}
+let hlNow = [];
+function setHL(names){
+  for (const m of hlNow) if (!(selected && meshOf(selected) === m)) m.material = m.userData.base;
+  hlNow = [];
+  if (!names.length) return;
+  const set = new Set(names);
+  partMeshes.forEach(m => { const p = DATA.parts[m.userData.i]; if (set.has(p.n.toLowerCase()) && p.k !== 'skin'){ m.material = hiMat; hlNow.push(m); } });
+}
+function fmtMs(s){ const ms = s * 1000; return ms >= 1000 ? (ms / 1000).toFixed(2) + ' s' : ms >= 100 ? ms.toFixed(0) + ' ms' : ms.toFixed(1) + ' ms'; }
+function startSim(o){
+  const prev = sim && sim.prevOp != null ? sim.prevOp : mats.bone.opacity;
+  clearSim();
+  sim = o; sim.t = 0; sim.playing = true; sim.prevOp = prev; sim.step = -1;
+  sim.total = Math.max(...sim.tracks.map(tr => tr.t0 + tr.dur));
+  sim.show = Math.min(22, Math.max(7, 4 + 2.2 * (sim.steps ? sim.steps.length : 1)));
+  setBoneOpacity(Math.min(prev, 0.28));
+  $('simBox').hidden = false; $('simName').textContent = sim.name; $('simBlurb').textContent = sim.blurb;
+  $('simPlay').textContent = 'Pause';
+  const ol = $('simSteps'); ol.innerHTML = '';
+  (sim.steps || []).forEach(s => { const li = document.createElement('li');
+    li.innerHTML = `<b>${s.label}</b><small>${(s.len * 100).toFixed(0)} cm at ${s.vel} m/s, ${fmtMs(s.len / s.vel + s.syn)}</small><p>${s.note}</p>`; ol.appendChild(li); });
+  const box = new T.Box3(); sim.tracks.forEach(tr => tr.pts.forEach(p => box.expandByPoint(p)));
+  frameBox(box, sim.dir || null, 1.25, 0.14);
+  tab(false); $('paneSig').scrollTop = 0;
+}
+function startPath(P){
+  let t = 0; const tracks = [];
+  for (const s of P.segs){ const dur = s.len / s.vel; tracks.push(makeTrack(toVecs(s.p), 0.0016, t + s.syn, dur)); t += s.syn + dur; }
+  const first = toVecs(P.segs[0].p)[0], side = P.segs.flatMap(s => s.p.filter((_, i) => i % 3 === 0)).reduce((a, b) => a + b, 0);
+  startSim({name:P.name, blurb:P.blurb, steps:P.segs, tracks, dir:new T.Vector3(side < 0 ? -0.75 : 0.75, 0.12, 1)});
+  $('pb_' + P.id).classList.add('on');
+}
+function fireNerve(n, inward){
+  const L = n.len, tracks = [];
+  n.lines.forEach((ln, j) => {
+    let pts = n.pts[j]; const len = pts.reduce((a, p, i) => i ? a + p.distanceTo(pts[i - 1]) : 0, 0);
+    let t0 = ln.d / n.vel; if (inward){ pts = pts.slice().reverse(); t0 = Math.max(0, (L - ln.d - len) / n.vel); }
+    tracks.push(makeTrack(pts, ln.r, t0, len / n.vel));
+  });
+  startSim({name:n.name, blurb:(inward ? 'A sensation travelling inward' : 'A command travelling outward') + ` at ${n.vel} m/s.`, tracks});
+}
+$('simPlay').onclick = () => { if (!sim) return; if (sim.t >= sim.total){ sim.t = 0; sim.playing = true; } else sim.playing = !sim.playing; $('simPlay').textContent = sim.playing ? 'Pause' : 'Play'; };
+$('simRestart').onclick = () => { if (sim){ sim.t = 0; sim.playing = true; sim.step = -1; $('simPlay').textContent = 'Pause'; } };
+$('simStop').onclick = clearSim;
+
+function tickSim(dt){
+  if (!sim) return;
+  const rate = sim.total / sim.show * parseFloat($('simSpeed').value);
+  if (sim.playing){ sim.t = Math.min(sim.total, sim.t + dt * rate); if (sim.t >= sim.total){ sim.playing = false; $('simPlay').textContent = 'Replay'; } }
+  let step = 0;
+  sim.tracks.forEach((tr, i) => {
+    const f = Math.min(1, Math.max(0, (sim.t - tr.t0) / tr.dur));
+    tr.glow.geometry.setDrawRange(0, Math.floor(f * tr.segs) * 6 * tr.glow.geometry.parameters.radialSegments);
+    const live = sim.t >= tr.t0 - 1e-9 && f < 1 || (f >= 1 && sim.t >= sim.total && i === sim.tracks.length - 1 && sim.steps);
+    tr.sp.visible = !!live;
+    if (live){ tr.sp.position.copy(pointAt(tr, f)); const d = camera.position.distanceTo(tr.sp.position); const k = d * 0.035 * (1 + 0.18 * Math.sin(performance.now() / 90)); tr.sp.scale.set(k, k, 1); }
+    if (sim.steps && sim.t >= tr.t0 - (sim.steps[i].syn || 0)) step = i;
+  });
+  $('simT').textContent = fmtMs(sim.t);
+  $('simSlow').textContent = `real time, shown ${Math.round(1 / rate).toLocaleString()}x slower`;
+  if (rate >= 1) $('simSlow').textContent = 'real time';
+  $('simBar').style.width = (sim.t / sim.total * 100) + '%';
+  if (sim.steps && step !== sim.step){
+    sim.step = step; setHL(sim.steps[step].hl || []);
+    [...$('simSteps').children].forEach((li, i) => { li.className = i < step ? 'done' : i === step ? 'now' : ''; });
+  }
+}
+
+/* ---------- loop ---------- */
+let last = performance.now();
+function loop(now){
+  const raw = (now - last) / 1000, dt = Math.min(0.05, raw); last = now;
+  if (fly){ fly.t = Math.min(1, fly.t + raw / 0.8); const e = fly.t < .5 ? 2 * fly.t * fly.t : 1 - Math.pow(-2 * fly.t + 2, 2) / 2;
+    controls.target.lerpVectors(fly.t0, fly.t1, e); camera.position.lerpVectors(fly.p0, fly.p1, e); if (fly.t >= 1) fly = null; }
+  controls.update(); tickSim(dt); renderer.render(scene, camera);
+  requestAnimationFrame(loop);
+}
+load().then(() => requestAnimationFrame(loop)).catch(err => { $('loadMsg').textContent = 'The anatomy data did not load (' + err.message + '). Reload the page to try again.'; });
+window.__atlas = {fire:(id, inw) => fireNerve(nerveObjs[id].n, inw), startPath:id => startPath(DATA.paths.find(p => p.id === id)), select, sim:() => sim, camera, controls, setBoneOpacity, flyDone:() => !fly, frame:(a, b, d) => frameBox(new T.Box3(new T.Vector3(...a), new T.Vector3(...b)), new T.Vector3(...d), 1.05), seek:f => { if (sim){ sim.t = sim.total * f; sim.playing = false; } }};
+</script>
+</body>
+</html>
