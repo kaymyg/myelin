@@ -9,10 +9,6 @@ Found a vulnerability instead? Please report it privately, see [SECURITY.md](SEC
 
 **Medium.** Add a CSP that permits only the bundled scripts and wallet injection, and test it with the main Solana wallets.
 
-### Record hashes of vendored libraries
-
-**Good first issue.** Document the upstream version and SHA-256 of `three.*.min.js` and `nacl-fast.min.js` so anyone can check they are unmodified.
-
 ### Anatomy data corrections
 
 **Good first issue.** Check nerve names and positions in `data.json` against an anatomy reference.
