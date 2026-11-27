@@ -63,7 +63,8 @@ page yet.
   under CC Attribution 4.0 International.
 - Geometry simplified by the open source Human Atlas project
   (github.com/ashemag/human-atlas).
-- three.js (MIT), TweetNaCl (public domain).
+- three.js (MIT), TweetNaCl (public domain). Versions and SHA-256 hashes of
+  the vendored copies are in [VENDORED.md](VENDORED.md).
 
 The game code is released under the [MIT License](LICENSE). The anatomy data above keeps its own CC BY 4.0 license.
 
