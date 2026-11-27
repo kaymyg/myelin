@@ -1,0 +1,6 @@
+# Paths CodeQL skips: deliberately vulnerable samples or vendored third party code.
+paths-ignore:
+  - 'three.core.min.js'
+  - 'three.module.min.js'
+  - 'nacl-fast.min.js'
+  - 'OrbitControls.js'
