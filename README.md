@@ -65,4 +65,9 @@ page yet.
   (github.com/ashemag/human-atlas).
 - three.js (MIT), TweetNaCl (public domain).
 
-No licence has been chosen for the game code in this repository yet.
+The game code is released under the [MIT License](LICENSE). The anatomy data above keeps its own CC BY 4.0 license.
+
+## Contributing
+
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for how to get set up and run the checks,
+and [SECURITY.md](SECURITY.md) for reporting vulnerabilities privately.
